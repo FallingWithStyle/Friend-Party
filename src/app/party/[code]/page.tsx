@@ -1,16 +1,39 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
+import { createClient } from '@/utils/supabase/client';
+
+interface Member {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+}
 
 export default function PartyLobbyPage() {
   const { code } = useParams();
   const { party, loading, error, getPartyByCode } = usePartyStore();
+  const [members, setMembers] = useState<Member[]>([]);
 
   useEffect(() => {
+    const supabase = createClient();
     if (code && typeof code === 'string') {
       getPartyByCode(code);
+
+      const fetchMembers = async () => {
+        const { data: partyData } = await supabase.from('parties').select('id').eq('code', code).single();
+        if (partyData) {
+          const { data: memberData, error: memberError } = await supabase
+            .from('party_members')
+            .select('*')
+            .eq('party_id', partyData.id);
+          if (memberData) {
+            setMembers(memberData);
+          }
+        }
+      };
+      fetchMembers();
     }
   }, [code, getPartyByCode]);
 
@@ -50,12 +73,14 @@ export default function PartyLobbyPage() {
             <p className="text-gray-600">{party.description || 'No description provided.'}</p>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-700">When</h2>
-            <p className="text-gray-600">{new Date(party.date).toLocaleString()}</p>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-700">Where</h2>
-            <p className="text-gray-600">{party.location}</p>
+            <h2 className="text-lg font-semibold text-gray-700">Party Members</h2>
+            <ul className="list-disc list-inside">
+              {members.map((member: Member) => (
+                <li key={member.id} className="text-gray-600">
+                  {member.first_name} {member.last_name}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>

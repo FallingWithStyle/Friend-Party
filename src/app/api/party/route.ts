@@ -1,103 +1,92 @@
-import { NextResponse } from 'next/server';
-import { v4 as uuidv4 } from 'uuid';
-import { generatePartyCode } from '@/utils/partyCodeGenerator';
-
-// In a real application, this would be a database
-let parties: Array<{
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  date: string;
-  location: string;
-}> = [];
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { generatePartyCode } from '@/utils/partyCodeGenerator'
 
 export async function POST(request: Request) {
-  try {
-    const { name, description, date, location } = await request.json();
+  const supabase = createClient()
 
-    // Validate required fields
-    if (!name || !date || !location) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+  try {
+    const { name, description, creatorName } = await request.json();
+
+    if (!name || !creatorName) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Generate a unique 6-digit code for the party
-    let code: string;
+    let partyCode: string;
     let isCodeUnique = false;
     let attempts = 0;
 
-    // Attempt to generate a unique party code
     do {
-      code = generatePartyCode();
-      isCodeUnique = !parties.some(p => p.code === code);
+      partyCode = generatePartyCode();
+      const { data: existingParty, error } = await supabase
+        .from('parties')
+        .select('code')
+        .eq('code', partyCode)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = 'No rows found'
+        throw error;
+      }
+
+      if (!existingParty) {
+        isCodeUnique = true;
+      }
       attempts++;
-    } while (!isCodeUnique && attempts < 10); // Limit attempts to prevent infinite loop
+    } while (!isCodeUnique && attempts < 10);
 
     if (!isCodeUnique) {
-      return NextResponse.json(
-        { error: 'Failed to generate a unique party code. Please try again.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to generate a unique party code' }, { status: 500 });
     }
 
-    // Create new party object
-    const newParty = {
-      id: uuidv4(),
-      code,
-      name,
-      description: description || '',
-      date,
-      location,
-    };
+    const { data: newParty, error: rpcError } = await supabase.rpc('create_party_and_leader', {
+      party_code: partyCode,
+      party_name: name,
+      party_description: description,
+      leader_name: creatorName,
+    });
 
-    // Store the party (in a real app, this would be a database)
-    parties.push(newParty);
+    if (rpcError) {
+      console.error('Supabase RPC Error:', rpcError);
+      throw rpcError;
+    }
 
-    // Return the created party with its code
     return NextResponse.json(newParty, { status: 201 });
+
   } catch (error) {
     console.error('Error creating party:', error);
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: 'An unexpected error occurred while creating the party.' },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return NextResponse.json({ error: `Internal server error: ${errorMessage}` }, { status: 500 });
   }
 }
 
 export async function GET(request: Request) {
+  const supabase = createClient();
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get('code');
+
+  if (!code) {
+    return NextResponse.json({ error: 'Party code is required' }, { status: 400 });
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const code = searchParams.get('code');
+    const { data: party, error } = await supabase
+      .from('parties')
+      .select('*')
+      .eq('code', code)
+      .single();
 
-    if (!code) {
-      return NextResponse.json(
-        { error: 'Party code is required' },
-        { status: 400 }
-      );
-    }
-
-    // Find the party with the matching code
-    const party = parties.find(p => p.code === code);
-
-    if (!party) {
-      return NextResponse.json(
-        { error: 'Party not found' },
-        { status: 404 }
-      );
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Party not found' }, { status: 404 });
+      }
+      throw error;
     }
 
     return NextResponse.json(party);
+
   } catch (error) {
     console.error('Error retrieving party:', error);
-    return NextResponse.json(
-      { error: 'An unexpected error occurred while retrieving the party.' },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return NextResponse.json({ error: `Internal server error: ${errorMessage}` }, { status: 500 });
   }
 }

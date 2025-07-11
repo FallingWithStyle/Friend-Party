@@ -8,15 +8,12 @@ export default function CreatePartyPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    date: '',
-    location: ''
+    creatorName: ''
   });
   const router = useRouter();
   const { createParty, party, loading, error } = usePartyStore();
   const [formErrors, setFormErrors] = useState({
     name: '',
-    date: '',
-    location: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -36,15 +33,10 @@ export default function CreatePartyPage() {
       errors.name = 'Party name is required.';
       hasErrors = true;
     }
-    if (!formData.date) {
-      errors.date = 'Date and time are required.';
-      hasErrors = true;
-    } else if (new Date(formData.date) < new Date()) {
-      errors.date = 'Party date cannot be in the past.';
-      hasErrors = true;
-    }
-    if (!formData.location.trim()) {
-      errors.location = 'Location is required.';
+    if (!formData.creatorName.trim()) {
+      // This is a new field, so we'll add a simple error message for it.
+      // In a real app, this might be part of the formErrors state.
+      alert('Your name is required to create a party.');
       hasErrors = true;
     }
 
@@ -90,6 +82,21 @@ export default function CreatePartyPage() {
           </div>
 
           <div>
+            <label htmlFor="creatorName" className="block text-sm font-medium text-gray-700">
+              Your Name (Party Leader)
+            </label>
+            <input
+              type="text"
+              id="creatorName"
+              name="creatorName"
+              value={formData.creatorName}
+              onChange={handleChange}
+              required
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
+            />
+          </div>
+
+          <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700">
               Description (optional)
             </label>
@@ -101,38 +108,6 @@ export default function CreatePartyPage() {
               rows={3}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
             />
-          </div>
-
-          <div>
-            <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-              Date and Time
-            </label>
-            <input
-              type="datetime-local"
-              id="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              required
-              className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border ${formErrors.date ? 'border-red-500' : ''}`}
-            />
-            {formErrors.date && <p className="text-red-500 text-xs mt-1">{formErrors.date}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-              Location
-            </label>
-            <input
-              type="text"
-              id="location"
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              required
-              className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border ${formErrors.location ? 'border-red-500' : ''}`}
-            />
-            {formErrors.location && <p className="text-red-500 text-xs mt-1">{formErrors.location}</p>}
           </div>
 
           <button
