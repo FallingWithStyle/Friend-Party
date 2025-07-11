@@ -1,26 +1,24 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English&family=Courier+Prime&display=swap');
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    font-family: 'Courier Prime', monospace;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'IM Fell English', serif;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #F5F5DC;
+  background-image: url('/parchment-texture.jpg');
+  background-size: cover;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
