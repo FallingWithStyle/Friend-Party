@@ -7,7 +7,7 @@ import usePartyStore from '@/store/partyStore';
 export default function CreatePartyPage() {
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
+    motto: '',
     creatorName: ''
   });
   const router = useRouter();
@@ -97,13 +97,13 @@ export default function CreatePartyPage() {
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Description (optional)
+            <label htmlFor="motto" className="block text-sm font-medium text-gray-700">
+              Motto (optional)
             </label>
             <textarea
-              id="description"
-              name="description"
-              value={formData.description}
+              id="motto"
+              name="motto"
+              value={formData.motto}
               onChange={handleChange}
               rows={3}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"

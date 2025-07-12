@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/utils/supabase/client';
 
@@ -50,7 +50,7 @@ const supabase = createClient();
 export default function PartyLobbyPage() {
   const { code } = useParams();
   const { party, loading, error, getPartyByCode } = usePartyStore();
-  
+  const router = useRouter();
   // --- State ---
   const [members, setMembers] = useState<Member[]>([]);
   const [proposals, setProposals] = useState<NameProposal[]>([]);
@@ -163,6 +163,21 @@ export default function PartyLobbyPage() {
     });
   };
 
+  const handleStartQuest = async () => {
+    if (!currentUserMember) return;
+
+    // Optimistically navigate, then update status
+    router.push(`/party/${code}/questionnaire`);
+
+    if (currentUserMember.status === 'Joined') {
+        await fetch(`/api/party/${code}/start-questionnaire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: currentUserMember.id }),
+      });
+    }
+  };
+
   // --- Render Logic ---
   if (loading) return <div className="text-center p-8">Loading Party...</div>;
   if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
@@ -190,6 +205,17 @@ export default function PartyLobbyPage() {
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">{party.name}</h1>
         <p className="text-center text-gray-500 mb-6">Party Code: <span className="font-bold text-purple-600">{party.code}</span></p>
         
+        {currentUserMember && (currentUserMember.status === 'Joined' || currentUserMember.status === 'Voting') && (
+          <div className="text-center my-6">
+            <button
+              onClick={handleStartQuest}
+              className="px-8 py-4 text-xl font-bold text-white bg-green-600 rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-transform transform hover:scale-105"
+            >
+              {currentUserMember.status === 'Joined' ? 'Start QUESTionnaire' : 'Continue QUESTionnaire'}
+            </button>
+          </div>
+        )}
+
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Party Members</h2>
         <div className="space-y-6">
           {members.map((member) => {

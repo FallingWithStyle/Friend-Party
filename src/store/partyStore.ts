@@ -5,7 +5,7 @@ interface Party {
   id: string;
   code: string;
   name: string;
-  description: string;
+  motto: string;
 }
 
 interface PartyState {

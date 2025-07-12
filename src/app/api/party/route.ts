@@ -8,36 +8,10 @@ export async function POST(request: Request) {
   const supabase = await createClient()
 
   try {
-    const { name, description, creatorName } = await request.json();
+    const { name, motto, creatorName } = await request.json();
 
     if (!name || !creatorName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    let partyCode: string;
-    let isCodeUnique = false;
-    let attempts = 0;
-
-    do {
-      partyCode = generatePartyCode();
-      const { data: existingParty, error } = await supabase
-        .from('parties')
-        .select('code')
-        .eq('code', partyCode)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = 'No rows found'
-        throw error;
-      }
-
-      if (!existingParty) {
-        isCodeUnique = true;
-      }
-      attempts++;
-    } while (!isCodeUnique && attempts < 10);
-
-    if (!isCodeUnique) {
-      return NextResponse.json({ error: 'Failed to generate a unique party code' }, { status: 500 });
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -45,17 +19,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You must be logged in to create a party' }, { status: 401 });
     }
 
-    const { data: newParty, error: rpcError } = await supabase.rpc('create_party_and_leader', {
-      party_code: partyCode,
-      party_name: name,
-      party_description: description,
-      leader_name: creatorName,
-      leader_user_id: user.id,
-    });
+    let newParty = null;
+    let attempts = 0;
+    const maxAttempts = 10;
 
-    if (rpcError) {
-      console.error('Supabase RPC Error:', rpcError);
-      throw rpcError;
+    while (attempts < maxAttempts) {
+      const partyCode = generatePartyCode();
+      const { data, error: rpcError } = await supabase.rpc('create_party_with_leader', {
+        party_code: partyCode,
+        party_name: name,
+        party_motto: motto,
+        leader_name: creatorName,
+        leader_email: user.email,
+      });
+
+      if (rpcError) {
+        // 23505 is the PostgreSQL error code for unique_violation
+        if (rpcError.code === '23505') {
+          attempts++;
+          continue; // Try again with a new code
+        }
+        // For other errors, throw them
+        console.error('Supabase RPC Error:', rpcError);
+        throw rpcError;
+      }
+
+      newParty = data;
+      break; // Success, exit loop
+    }
+
+    if (!newParty) {
+      return NextResponse.json({ error: 'Failed to create a unique party' }, { status: 500 });
     }
 
     return NextResponse.json(newParty, { status: 201 });
