@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { generatePartyCode } from '@/utils/partyCodeGenerator'
 
+import { cookies } from 'next/headers'
+
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     const { name, description, creatorName } = await request.json();
@@ -38,11 +40,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to generate a unique party code' }, { status: 500 });
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'You must be logged in to create a party' }, { status: 401 });
+    }
+
     const { data: newParty, error: rpcError } = await supabase.rpc('create_party_and_leader', {
       party_code: partyCode,
       party_name: name,
       party_description: description,
       leader_name: creatorName,
+      leader_user_id: user.id,
     });
 
     if (rpcError) {
@@ -60,7 +68,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient()
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
 

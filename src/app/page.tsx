@@ -1,6 +1,5 @@
 'use client';
 
-import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -11,18 +10,15 @@ export default function Home() {
 
   const handleJoinParty = (e: React.FormEvent) => {
     e.preventDefault();
-    if (partyCode.trim()) {
+    if (partyCode.trim().length === 6) {
       router.push(`/party/${partyCode}/join`);
+    } else {
+      alert('Please enter a valid 6-character party code.');
     }
   };
 
   return (
     <>
-      <Head>
-        <title>Friend Party</title>
-        <meta name="description" content="Discover your friends' inner adventurers" />
-      </Head>
-
       <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-neutral text-primary">
         <div className="w-full max-w-4xl">
           <div className="text-center mb-12">
@@ -69,8 +65,7 @@ export default function Home() {
                 </div>
                 <button
                   type="submit"
-                  disabled={partyCode.length !== 6}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all"
                 >
                   Join Party
                 </button>

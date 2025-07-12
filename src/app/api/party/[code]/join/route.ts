@@ -4,10 +4,10 @@ import { cookies } from 'next/headers';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  { params: paramsPromise }: { params: Promise<{ code: string }> }
 ) {
-  const supabase = createClient();
-  const { code } = params;
+  const supabase = await createClient();
+  const { code } = await paramsPromise;
   const { firstName, lastName } = await request.json();
 
   if (!firstName) {
@@ -26,6 +26,12 @@ export async function POST(
       return NextResponse.json({ error: 'Party not found' }, { status: 404 });
     }
 
+    // Check if user is authenticated
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'You must be logged in to join a party' }, { status: 401 });
+    }
+
     // Now, add the new member to the party
     const { data: newMember, error: insertError } = await supabase
       .from('party_members')
@@ -33,6 +39,8 @@ export async function POST(
         party_id: party.id,
         first_name: firstName,
         last_name: lastName,
+        email: user.email,
+        user_id: user.id, // Add the user's ID
       })
       .select()
       .single();
