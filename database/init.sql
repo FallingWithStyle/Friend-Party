@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.parties (
 CREATE TABLE IF NOT EXISTS public.party_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   party_id UUID REFERENCES public.parties(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   first_name TEXT NOT NULL,
   last_name TEXT,
   email TEXT,
@@ -21,6 +22,10 @@ CREATE TABLE IF NOT EXISTS public.party_members (
   exp INTEGER DEFAULT 0 NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- Add a unique constraint
+ALTER TABLE public.party_members
+ADD CONSTRAINT unique_party_user UNIQUE (party_id, user_id);
 
 -- Enable Row Level Security (RLS) for both tables
 ALTER TABLE public.parties ENABLE ROW LEVEL SECURITY;
@@ -87,37 +92,75 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create the 'proposed_names' table
-CREATE TABLE IF NOT EXISTS public.proposed_names (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  party_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE,
-  proposed_name TEXT NOT NULL,
-  proposer_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+-- Drop the old 'proposed_names' table if it exists
+DROP TABLE IF EXISTS public.proposed_names CASCADE;
+
+-- Create the 'name_proposals' table
+CREATE TABLE name_proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID REFERENCES parties(id) ON DELETE CASCADE NOT NULL,
+    target_member_id UUID REFERENCES party_members(id) ON DELETE CASCADE NOT NULL,
+    proposing_member_id UUID REFERENCES party_members(id) ON DELETE CASCADE NOT NULL,
+    proposed_name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL
 );
 
--- Enable RLS for the 'proposed_names' table
-ALTER TABLE public.proposed_names ENABLE ROW LEVEL SECURITY;
+-- Add comments to the 'name_proposals' table
+COMMENT ON TABLE public.name_proposals IS 'Stores proposed adventurer names for party members during a naming event.';
+COMMENT ON COLUMN public.name_proposals.is_active IS 'Identifies the current active naming event for a user.';
 
--- Allow members of a party to propose names for other members
-DROP POLICY IF EXISTS "Allow members to insert proposed names" ON public.proposed_names;
-CREATE POLICY "Allow members to insert proposed names" ON public.proposed_names FOR INSERT WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.party_members pm
-    WHERE pm.id = proposer_id AND pm.party_id = (SELECT party_id FROM public.party_members WHERE id = party_member_id)
-  )
+
+-- Enable RLS for 'name_proposals'
+ALTER TABLE public.name_proposals ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for name_proposals
+CREATE POLICY "Allow members to see proposals in their party"
+ON public.name_proposals FOR SELECT
+USING (
+    party_id IN (
+        SELECT party_id FROM party_members WHERE user_id = auth.uid()
+    )
 );
 
--- Allow members of a party to see proposed names
-DROP POLICY IF EXISTS "Allow members to read proposed names" ON public.proposed_names;
-CREATE POLICY "Allow members to read proposed names" ON public.proposed_names FOR SELECT USING (
-  EXISTS (
-    SELECT 1
-    FROM public.party_members pm
-    WHERE pm.party_id = (SELECT party_id FROM public.party_members WHERE id = party_member_id)
-  )
+CREATE POLICY "Allow members to insert proposals in their party"
+ON public.name_proposals FOR INSERT
+WITH CHECK (
+    proposing_member_id IN (
+        SELECT id FROM party_members WHERE user_id = auth.uid()
+    )
 );
 
--- Add comments to the 'proposed_names' table
-COMMENT ON TABLE public.proposed_names IS 'Stores proposed adventurer names for party members.';
+-- Create the 'name_proposal_votes' table
+CREATE TABLE name_proposal_votes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id UUID REFERENCES name_proposals(id) ON DELETE CASCADE NOT NULL,
+    voter_member_id UUID REFERENCES party_members(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE (proposal_id, voter_member_id)
+);
+
+-- Add comments to the 'name_proposal_votes' table
+COMMENT ON TABLE public.name_proposal_votes IS 'Tracks votes for proposed adventurer names.';
+COMMENT ON COLUMN public.name_proposal_votes.voter_member_id IS 'The party member who cast the vote.';
+
+
+-- Enable RLS for 'name_proposal_votes'
+ALTER TABLE public.name_proposal_votes ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for name_proposal_votes
+CREATE POLICY "Allow members to see votes in their party"
+ON public.name_proposal_votes FOR SELECT
+USING (
+    (SELECT party_id FROM name_proposals WHERE id = proposal_id) IN (
+        SELECT party_id FROM party_members WHERE user_id = auth.uid()
+    )
+);
+
+CREATE POLICY "Allow members to cast votes in their party"
+ON public.name_proposal_votes FOR INSERT
+WITH CHECK (
+    voter_member_id IN (
+        SELECT id FROM party_members WHERE user_id = auth.uid()
+    )
+);

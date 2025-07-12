@@ -1,231 +1,261 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/utils/supabase/client';
 
+// --- Interfaces ---
 interface Member {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string | null;
   is_leader: boolean;
+  status: string;
   adventurer_name: string | null;
 }
 
-interface ProposedName {
+interface NameProposal {
   id: string;
-  party_member_id: string;
+  target_member_id: string;
+  proposing_member_id: string;
   proposed_name: string;
-  proposer_id: string;
+  is_active: boolean;
+}
+
+interface NameProposalVote {
+  id: string;
+  proposal_id: string;
+  voter_member_id: string;
+}
+
+// Type for the data returned from the votes query
+type VoteWithProposalParty = NameProposalVote & {
+  proposal: {
+    party_id: string;
+  }
+};
+
+interface VotingStatus {
+  proposals: NameProposal[];
+  userHasVoted: boolean;
+  isTie: boolean;
+  tieProposals: NameProposal[];
 }
 
 const supabase = createClient();
 
+// --- Main Component ---
 export default function PartyLobbyPage() {
   const { code } = useParams();
   const { party, loading, error, getPartyByCode } = usePartyStore();
+  
+  // --- State ---
   const [members, setMembers] = useState<Member[]>([]);
-  const [proposedNames, setProposedNames] = useState<ProposedName[]>([]);
-  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
+  const [proposals, setProposals] = useState<NameProposal[]>([]);
+  const [votes, setVotes] = useState<NameProposalVote[]>([]);
+  const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
+  const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
 
-  // Effect to get the current user
+  // --- Effects ---
   useEffect(() => {
-    const getUser = async () => {
-      if (!party) return; // Add a guard clause here
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // This is a simplified user object. You might need to fetch the full party_member profile
-        // if you need more details like first_name, etc. for the current user.
-        // For now, we just need the ID to check if they are the leader or can propose names.
-        const { data: memberData } = await supabase
-          .from('party_members')
-          .select('id')
-          .eq('email', user.email)
-          .eq('party_id', party.id)
-          .single();
-        setCurrentUser(memberData);
-      }
-    };
-    getUser();
-  }, []);
-
-  // Effect for fetching initial party data
-  useEffect(() => {
-    if (code && typeof code === 'string') {
-      getPartyByCode(code);
-    }
+    if (code && typeof code === 'string') getPartyByCode(code);
   }, [code, getPartyByCode]);
 
-  // Effect for fetching members and setting up subscription
   useEffect(() => {
-    // Do nothing until the party is loaded
+    const fetchUserMember = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && party) {
+        const { data } = await supabase.from('party_members').select('*').eq('party_id', party.id).eq('user_id', user.id).single();
+        setCurrentUserMember(data);
+      }
+    };
+    if (party) fetchUserMember();
+  }, [party]);
+
+  useEffect(() => {
     if (!party) return;
 
-    // Fetch initial members and proposed names
     const fetchData = async () => {
-      const { data: memberData } = await supabase
-        .from('party_members')
-        .select('*')
-        .eq('party_id', party.id);
-      if (memberData) {
-        setMembers(memberData);
-      }
+      const { data: memberData } = await supabase.from('party_members').select('*').eq('party_id', party.id).order('created_at');
+      if (memberData) setMembers(memberData);
 
-      const { data: proposedNamesData } = await supabase
-        .from('proposed_names')
-        .select('*')
-        .in('party_member_id', memberData?.map(m => m.id) || []);
-      if (proposedNamesData) {
-        setProposedNames(proposedNamesData);
-      }
+      const { data: proposalData } = await supabase.from('name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
+      if (proposalData) setProposals(proposalData);
+
+      const { data: voteData } = await supabase.from('name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
+      if (voteData) setVotes(voteData as VoteWithProposalParty[]);
     };
 
     fetchData();
 
-    // Set up real-time subscriptions
-    const membersChannel = supabase
-      .channel(`realtime-party-members:${party.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setMembers((current) => [...current, payload.new as Member]);
-          }
-          if (payload.eventType === 'UPDATE') {
-            setMembers((current) => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
-          }
-        }
-      )
-      .subscribe();
+    const membersSub = supabase.channel(`members:${party.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, payload => {
+      if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
+      if (payload.eventType === 'UPDATE') setMembers(current => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
+    }).subscribe();
 
-    const proposedNamesChannel = supabase
-      .channel(`realtime-proposed-names:${party.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'proposed_names' },
-        (payload) => {
-          setProposedNames((current) => [...current, payload.new as ProposedName]);
+    const proposalsSub = supabase.channel(`proposals:${party.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, payload => {
+      if (payload.eventType === 'INSERT') setProposals(current => [...current, payload.new as NameProposal]);
+      if (payload.eventType === 'UPDATE') {
+        const updated = payload.new as NameProposal;
+        if (!updated.is_active) { // If proposal becomes inactive, remove it and its votes
+          setProposals(current => current.filter(p => p.id !== updated.id));
+          setVotes(current => current.filter(v => v.proposal_id !== updated.id));
+        } else {
+          setProposals(current => current.map(p => p.id === updated.id ? updated : p));
         }
-      )
-      .subscribe();
+      }
+    }).subscribe();
 
-    // Cleanup function to remove the channel subscriptions when the component unmounts
+    const votesSub = supabase.channel(`votes:${party.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, payload => {
+      // We need to fetch the proposal party_id to ensure it belongs to this party
+      // This is a simplified approach for the subscription payload
+      setVotes(current => [...current, payload.new as NameProposalVote]);
+    }).subscribe();
+
     return () => {
-      supabase.removeChannel(membersChannel);
-      supabase.removeChannel(proposedNamesChannel);
+      supabase.removeChannel(membersSub);
+      supabase.removeChannel(proposalsSub);
+      supabase.removeChannel(votesSub);
     };
-  }, [party]); // This effect runs whenever the party object changes
+  }, [party]);
 
-  const handleProposeName = async (partyMemberId: string, name: string) => {
-    if (!currentUser) return;
-    await supabase.from('proposed_names').insert({
-      party_member_id: partyMemberId,
-      proposed_name: name,
-      proposer_id: currentUser.id,
+  // --- Memoized Vote Counts ---
+  const voteCounts = useMemo(() => {
+    return proposals.reduce((acc, proposal) => {
+      acc[proposal.id] = votes.filter(v => v.proposal_id === proposal.id).length;
+      return acc;
+    }, {} as { [key: string]: number });
+  }, [proposals, votes]);
+
+  // --- API Handlers ---
+  const handleProposeName = async (targetMemberId: string) => {
+    const proposedName = nameProposalInput[targetMemberId];
+    if (!proposedName || !currentUserMember) return;
+
+    const response = await fetch(`/api/party/${code}/propose-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_member_id: targetMemberId, proposed_name: proposedName }),
+    });
+
+    if (response.ok) {
+      setNameProposalInput(prev => ({ ...prev, [targetMemberId]: '' }));
+    } else {
+      console.error('Failed to propose name');
+    }
+  };
+
+  const handleCastVote = async (proposalId: string) => {
+    await fetch(`/api/party/${code}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
     });
   };
 
-  const handleSelectName = async (partyMemberId: string, name: string) => {
-    await supabase
-      .from('party_members')
-      .update({ adventurer_name: name })
-      .eq('id', partyMemberId);
+  const handleFinalizeName = async (proposalId: string) => {
+    await fetch(`/api/party/${code}/finalize-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-        <p className="text-white text-2xl">Loading Party...</p>
-      </div>
-    );
-  }
+  // --- Render Logic ---
+  if (loading) return <div className="text-center p-8">Loading Party...</div>;
+  if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
+  if (!party) return <div className="text-center p-8">Party not found.</div>;
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
-        <p className="text-white text-2xl">{error}</p>
-      </div>
-    );
-  }
+  const getVotingStatusForMember = (memberId: string): VotingStatus => {
+    const memberProposals = proposals.filter(p => p.target_member_id === memberId);
 
-  if (!party) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center">
-        <p className="text-white text-2xl">Party not found.</p>
-      </div>
-    );
-  }
+    const maxVotes = Math.max(0, ...memberProposals.map(p => voteCounts[p.id] || 0));
+    const winningProposals = memberProposals.filter(p => (voteCounts[p.id] || 0) === maxVotes && maxVotes > 0);
+    
+    const userHasVoted = votes.some(v => v.voter_member_id === currentUserMember?.id && memberProposals.some(p => p.id === v.proposal_id));
+
+    return {
+      proposals: memberProposals,
+      userHasVoted,
+      isTie: winningProposals.length > 1,
+      tieProposals: winningProposals,
+    };
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 p-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">{party.name}</h1>
         <p className="text-center text-gray-500 mb-6">Party Code: <span className="font-bold text-purple-600">{party.code}</span></p>
         
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-700">Description</h2>
-            <p className="text-gray-600">{party.description || 'No description provided.'}</p>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-700">Party Members</h2>
-            <div className="space-y-6">
-              {members.map((member: Member) => (
-                <div key={member.id} className="p-4 border rounded-lg">
-                  <h3 className="text-xl font-bold">{member.first_name} {member.last_name} {member.is_leader && '(Leader)'}</h3>
-                  {member.adventurer_name ? (
-                    <p className="text-lg text-green-600">Adventurer Name: {member.adventurer_name}</p>
-                  ) : (
-                    <div>
-                      <p className="text-sm text-gray-500">No adventurer name selected yet.</p>
-                      <div className="mt-2">
-                        <h4 className="font-semibold">Proposed Names:</h4>
-                        <ul className="list-disc list-inside ml-4">
-                          {proposedNames.filter(pn => pn.party_member_id === member.id).map(pn => (
-                            <li key={pn.id}>
-                              {pn.proposed_name}
-                              {members.find(m => m.is_leader)?.id === currentUser?.id && (
-                                <button
-                                  onClick={() => handleSelectName(member.id, pn.proposed_name)}
-                                  className="ml-2 px-2 py-1 text-xs text-white bg-green-500 rounded hover:bg-green-600"
-                                >
-                                  Select
-                                </button>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      {currentUser && currentUser.id !== member.id && (
-                        <form
-                          className="mt-2 flex gap-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            const form = e.target as HTMLFormElement;
-                            const input = form.elements.namedItem('name') as HTMLInputElement;
-                            handleProposeName(member.id, input.value);
-                            form.reset();
-                          }}
-                        >
-                          <input
-                            name="name"
-                            type="text"
-                            placeholder="Propose a name"
-                            className="border p-1 rounded w-full"
-                          />
-                          <button type="submit" className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-                            Propose
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  )}
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Party Members</h2>
+        <div className="space-y-6">
+          {members.map((member) => {
+            if (member.adventurer_name) {
+              return (
+                <div key={member.id} className="p-4 border rounded-lg bg-gray-50">
+                  <h3 className="text-xl font-bold text-gray-800">{member.first_name} {member.is_leader && '👑'}</h3>
+                  <p className="text-lg text-purple-600 font-semibold">"{member.adventurer_name}"</p>
                 </div>
-              ))}
-            </div>
-          </div>
+              );
+            }
+
+            const { proposals: memberProposals, userHasVoted, isTie, tieProposals } = getVotingStatusForMember(member.id);
+            const canVote = currentUserMember?.id !== member.id && !userHasVoted;
+            const canBreakTie = (currentUserMember?.id === member.id || (currentUserMember?.is_leader && isTie));
+
+            return (
+              <div key={member.id} className="p-4 border rounded-lg bg-gray-50">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">{member.first_name} {member.is_leader && '👑'} - Needs a Name!</h3>
+                
+                {isTie && canBreakTie && (
+                  <div className="my-4 p-3 bg-yellow-100 border-l-4 border-yellow-500">
+                    <h4 className="font-bold text-yellow-800">Tie-breaker!</h4>
+                    <p className="text-sm text-yellow-700">As the one being named (or Party Leader), you must choose the final name.</p>
+                    <div className="flex gap-2 mt-2">
+                      {tieProposals.map(p => (
+                        <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="px-3 py-1 text-sm text-white bg-green-600 hover:bg-green-700 rounded">
+                          Choose "{p.proposed_name}"
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {memberProposals.map(p => (
+                    <div key={p.id} className="flex items-center justify-between">
+                      <span>{p.proposed_name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-lg text-purple-700">{voteCounts[p.id] || 0}</span>
+                        {canVote && (
+                          <button onClick={() => handleCastVote(p.id)} className="px-3 py-1 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded">Vote</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {memberProposals.length === 0 && <p className="text-sm text-gray-500">No names proposed yet.</p>}
+                </div>
+
+                {currentUserMember && currentUserMember.id !== member.id && (
+                  <div className="flex items-center space-x-2 pt-4 mt-4 border-t">
+                    <input
+                      type="text"
+                      value={nameProposalInput[member.id] || ''}
+                      onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
+                      placeholder="Propose a name..."
+                      className="flex-grow p-2 border rounded"
+                    />
+                    <button onClick={() => handleProposeName(member.id)} className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded">
+                      Propose
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

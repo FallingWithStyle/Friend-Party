@@ -2,11 +2,36 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+type Party = {
+  code: string;
+  name: string;
+};
 
 export default function Home() {
   const [partyCode, setPartyCode] = useState('');
+  const [joinedParties, setJoinedParties] = useState<Party[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchParties = async () => {
+      try {
+        const response = await fetch('/api/user/parties');
+        if (response.ok) {
+          const data = await response.json();
+          setJoinedParties(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch joined parties:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchParties();
+  }, []);
 
   const handleJoinParty = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +96,30 @@ export default function Home() {
                 </button>
               </form>
             </div>
+          </div>
+
+          {/* Add this new section within the main div of the return statement */}
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold">Your Parties</h2>
+            {isLoading ? (
+              <p>Loading your parties...</p>
+            ) : joinedParties.length > 0 ? (
+              <ul>
+                {joinedParties.map((party) => (
+                  <li key={party.code} className="flex items-center justify-between p-2 border-b">
+                    <span>{party.name}</span>
+                    <button
+                      onClick={() => router.push(`/party/${party.code}`)}
+                      className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
+                    >
+                      Enter Party
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No parties joined.</p>
+            )}
           </div>
         </div>
       </main>

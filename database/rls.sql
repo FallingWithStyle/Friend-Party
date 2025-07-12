@@ -35,6 +35,31 @@ DROP FUNCTION IF EXISTS is_party_member(uuid, uuid);
 
 -- == CURRENT WORKING POLICIES ==
 
+-- Add this helper function
+CREATE OR REPLACE FUNCTION is_party_member(party_id_to_check UUID, user_id_to_check UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.party_members
+    WHERE party_id = party_id_to_check AND user_id = user_id_to_check
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Replace existing policies
+DROP POLICY IF EXISTS "Allow authenticated users to read party data" ON public.parties;
+CREATE POLICY "Allow users to read parties they are a member of"
+ON public.parties FOR SELECT
+TO authenticated
+USING (is_party_member(id, auth.uid()));
+
+DROP POLICY IF EXISTS "Allow authenticated users to read party member data" ON public.party_members;
+CREATE POLICY "Allow users to see members of their own parties"
+ON public.party_members FOR SELECT
+TO authenticated
+USING (is_party_member(party_id, auth.uid()));
+
 -- 1. Allow authenticated users to create new parties.
 CREATE POLICY "Allow authenticated users to create parties"
 ON public.parties FOR INSERT
@@ -46,15 +71,3 @@ CREATE POLICY "Allow users to be added to parties"
 ON public.party_members FOR INSERT
 TO authenticated
 WITH CHECK (user_id = auth.uid());
-
--- 3. Allow users to read data from the parties table.
-CREATE POLICY "Allow authenticated users to read party data"
-ON public.parties FOR SELECT
-TO authenticated
-USING (true);
-
--- 4. Allow authenticated users to read party member data.
-CREATE POLICY "Allow authenticated users to read party member data"
-ON public.party_members FOR SELECT
-TO authenticated
-USING (true);
