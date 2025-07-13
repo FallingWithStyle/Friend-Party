@@ -3,6 +3,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 type Party = {
   code: string;
@@ -44,83 +51,37 @@ export default function Home() {
 
   return (
     <>
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-neutral text-primary">
-        <div className="w-full max-w-4xl">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl md:text-7xl font-display mb-4 text-red-500">Friend Party</h1>
-            <p className="text-xl md:text-2xl font-body mb-8">
-              Discover your friends' inner adventurers.
-            </p>
-          </div>
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 text-text-primary">
+        <div className="w-full max-w-2xl text-center">
+          <h1 className="text-8xl md:text-9xl font-heading mb-4 text-primary">Friend Party</h1>
+          <div className="w-48 h-1 bg-primary mx-auto mb-12"></div>
+          <p className="text-3xl md:text-4xl font-body mb-24 text-text-muted">
+            Gather your allies, assess your bonds, and reveal your party's true nature.
+          </p>
 
-          <div className="flex flex-col md:flex-row gap-8">
-            <div className="w-full md:w-1/2 bg-neutral border-2 border-secondary rounded-lg p-6 md:p-8 shadow-lg">
-              <h2 className="text-2xl font-display mb-4">Create New Party</h2>
-              <p className="font-body mb-6">
-                Gather your adventurers and begin your quest to uncover hidden truths about your party.
-              </p>
-              <Link
-                href="/create"
-                className="w-full bg-primary hover:bg-opacity-90 text-neutral font-display py-3 px-6 rounded-md transition-all hover:shadow-[0_0_10px_#FFD700] block text-center"
-              >
-                Create New Party
-              </Link>
-            </div>
+          <Button asChild size="xl" className="mb-16">
+            <Link href="/create">» Forge a New Party «</Link>
+          </Button>
 
-            <div className="w-full md:w-1/2 bg-neutral border-2 border-secondary rounded-lg p-6 md:p-8 shadow-lg flex flex-col">
-              <h2 className="text-2xl font-display mb-4">Join Existing Party</h2>
-              <p className="font-body mb-6">
-                Enter the secret code provided by your party leader to join the adventure.
-              </p>
-              <form onSubmit={handleJoinParty} className="w-full max-w-xs mx-auto">
-                <div className="mb-4">
-                  <label htmlFor="partyCode" className="sr-only">
-                    Party Code
-                  </label>
-                  <input
-                    type="text"
-                    id="partyCode"
-                    value={partyCode}
-                    onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
-                    maxLength={6}
-                    className="w-full text-center bg-white/10 border-2 border-white/20 rounded-lg py-3 px-4 font-body text-lg tracking-widest placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                    placeholder="ABC123"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all"
-                >
-                  Join Party
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Add this new section within the main div of the return statement */}
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold">Your Parties</h2>
-            {isLoading ? (
-              <p>Loading your parties...</p>
-            ) : joinedParties.length > 0 ? (
-              <ul>
-                {joinedParties.map((party) => (
-                  <li key={party.code} className="flex items-center justify-between p-2 border-b">
-                    <span>{party.name}</span>
-                    <button
-                      onClick={() => router.push(`/party/${party.code}`)}
-                      className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
-                    >
-                      Enter Party
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No parties joined.</p>
-            )}
-          </div>
+          <p className="font-body text-2xl text-text-muted mb-6">Or, Join an Existing Party:</p>
+          <form onSubmit={handleJoinParty} className="flex items-center justify-center gap-6">
+            <label htmlFor="partyCode" className="sr-only">
+              Party Code
+            </label>
+            <input
+              type="text"
+              id="partyCode"
+              value={partyCode}
+              onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
+              maxLength={6}
+              className="w-80 text-center bg-bg-primary border-4 border-border-primary rounded-xl py-4 px-8 font-body text-3xl tracking-widest placeholder-text-muted focus:outline-none focus:ring-4 focus:ring-primary"
+              placeholder="Enter Party Code"
+              required
+            />
+            <Button type="submit" variant="secondary" size="xl">Join</Button>
+          </form>
+          <div className="w-32 h-px bg-primary mx-auto mt-24"></div>
+          <p className="text-xl font-body text-text-muted mt-8">© 2025 Friend Party</p>
         </div>
       </main>
     </>

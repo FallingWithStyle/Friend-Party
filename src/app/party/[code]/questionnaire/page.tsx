@@ -24,6 +24,14 @@ export default function QuestionnairePage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentUserMember, setCurrentUserMember] = useState<PartyMember | null>(null);
   const [loading, setLoading] = useState(true);
+  const [abilityScores, setAbilityScores] = useState({
+    STR: 0,
+    DEX: 0,
+    CON: 0,
+    INT: 0,
+    WIS: 0,
+    CHA: 0
+  });
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -62,10 +70,29 @@ export default function QuestionnairePage() {
     fetchInitialData();
   }, [code, router]);
 
+  const calculateScores = (answers: string[]) => {
+    const counts: Record<string, number> = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
+    answers.forEach(answer => {
+      if (Object.keys(counts).includes(answer)) {
+        counts[answer] = (counts[answer] || 0) + 1;
+      }
+    });
+    return {
+      STR: counts.STR * 2,
+      DEX: counts.DEX * 2,
+      CON: counts.CON * 2,
+      INT: counts.INT * 2,
+      WIS: counts.WIS * 2,
+      CHA: counts.CHA * 2
+    };
+  };
+
   const handleAnswer = async (answer: string) => {
     if (!currentUserMember || !questions[currentQuestionIndex]) return;
 
     const currentQuestion = questions[currentQuestionIndex];
+    const newScores = calculateScores([answer]);
+    setAbilityScores(newScores);
 
     const { error } = await supabase.from('answers').insert({
       question_id: currentQuestion.id,
@@ -133,6 +160,16 @@ export default function QuestionnairePage() {
               {option}
             </button>
           ))}
+        </div>
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-2">Current Ability Scores</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {Object.entries(abilityScores).map(([stat, value]) => (
+              <div key={stat} className="bg-gray-100 p-3 rounded-lg">
+                <span className="font-medium">{stat}:</span> {value}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

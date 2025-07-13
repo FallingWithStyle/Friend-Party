@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS public.party_members (
   wisdom INTEGER,
   charisma INTEGER,
   character_class TEXT,
+  class TEXT,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT unique_party_user UNIQUE (party_id, user_id)
 );

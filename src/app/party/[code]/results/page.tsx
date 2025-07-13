@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 
 type PartyMember = {
@@ -15,7 +15,8 @@ type PartyMember = {
   class: string;
 };
 
-export default function ResultsPage({ params }: { params: { code: string } }) {
+export default function ResultsPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = use(params);
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function ResultsPage({ params }: { params: { code: string } }) {
         const { data: partyData, error: partyError } = await supabase
           .from('parties')
           .select('id')
-          .eq('code', params.code)
+          .eq('code', code)
           .single();
 
         if (partyError) throw partyError;
@@ -59,7 +60,7 @@ export default function ResultsPage({ params }: { params: { code: string } }) {
     };
 
     fetchResults();
-  }, [params.code, supabase]);
+  }, [code, supabase]);
 
   if (loading) {
     return <div>Loading...</div>;

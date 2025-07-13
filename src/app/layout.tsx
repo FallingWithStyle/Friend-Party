@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import "@/app/main.css";
 import Auth from "@/components/Auth";
+import Header from "@/components/Header";
 
 export const metadata: Metadata = {
   title: "Friend Party",
@@ -14,9 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <Auth />
-        {children}
+      <body className="bg-background text-foreground font-body">
+        <Header />
+        <main className="container mx-auto p-4">
+          <Auth />
+          {children}
+        </main>
       </body>
     </html>
   );
