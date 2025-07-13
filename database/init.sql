@@ -28,6 +28,7 @@ DROP FUNCTION IF EXISTS public.create_party_with_leader(text, text, text, text, 
 DROP FUNCTION IF EXISTS public.create_party_and_leader(text, text, text, text, text);
 
 -- Drop Tables
+DROP TABLE IF EXISTS public.stats CASCADE;
 DROP TABLE IF EXISTS public.answers CASCADE;
 DROP TABLE IF EXISTS public.name_proposal_votes CASCADE;
 DROP TABLE IF EXISTS public.party_motto_proposals CASCADE;
@@ -39,6 +40,20 @@ DROP TABLE IF EXISTS public.parties CASCADE;
 
 -- == 2. CREATE TABLES ==
 -- Create all tables in the correct order to satisfy foreign key constraints.
+
+CREATE TABLE IF NOT EXISTS public.stats (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+COMMENT ON TABLE public.stats IS 'Stores the core D&D-style stats.';
+
+INSERT INTO public.stats (id, name) VALUES
+('STR', 'Strength'),
+('DEX', 'Dexterity'),
+('CON', 'Constitution'),
+('INT', 'Intelligence'),
+('WIS', 'Wisdom'),
+('CHA', 'Charisma');
 
 CREATE TABLE IF NOT EXISTS public.parties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -62,6 +77,13 @@ CREATE TABLE IF NOT EXISTS public.party_members (
   status TEXT DEFAULT 'Joined' NOT NULL,
   adventurer_name TEXT,
   exp INTEGER DEFAULT 0 NOT NULL,
+  strength INTEGER,
+  dexterity INTEGER,
+  constitution INTEGER,
+  intelligence INTEGER,
+  wisdom INTEGER,
+  charisma INTEGER,
+  character_class TEXT,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT unique_party_user UNIQUE (party_id, user_id)
 );
@@ -73,6 +95,7 @@ CREATE TABLE IF NOT EXISTS public.questions (
     question_text TEXT NOT NULL,
     question_type TEXT NOT NULL,
     answer_options TEXT[] NOT NULL,
+    stat_id TEXT REFERENCES public.stats(id),
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 COMMENT ON TABLE public.questions IS 'Stores the questions for the questionnaire.';
