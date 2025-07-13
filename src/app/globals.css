@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Garamond&display=swap');
+
+:root {
+  --background: 40 56% 85%; /* bg-primary: #F5DEB3 */
+  --foreground: 23 37% 17%; /* text-primary: #3A241D */
+
+  --card: 35 43% 69%; /* bg-surface: #D2B48C */
+  --card-foreground: 23 37% 17%; /* text-primary: #3A241D */
+
+  --popover: 35 43% 69%; /* bg-surface: #D2B48C */
+  --popover-foreground: 23 37% 17%; /* text-primary: #3A241D */
+
+  --primary: 0 100% 27%; /* primary: #8B0000 */
+  --primary-foreground: 40 56% 85%; /* bg-primary: #F5DEB3 */
+
+  --secondary: 240 100% 27%; /* secondary: #00008B */
+  --secondary-foreground: 40 56% 85%; /* bg-primary: #F5DEB3 */
+
+  --muted: 30 25% 35%; /* text-muted: #6F4E37 */
+  --muted-foreground: 30 25% 35%; /* text-muted: #6F4E37 */
+
+  --accent: 80 38% 34%; /* accent: #556B2F */
+  --accent-foreground: 40 56% 85%; /* bg-primary: #F5DEB3 */
+
+  --destructive: 0 100% 27%; /* primary: #8B0000 */
+  --destructive-foreground: 40 56% 85%; /* bg-primary: #F5DEB3 */
+
+  --border: 26 33% 38%; /* border-primary: #855E42 */
+  --input: 26 33% 38%; /* border-primary: #855E42 */
+  --ring: 240 100% 27%; /* secondary: #00008B */
+}
