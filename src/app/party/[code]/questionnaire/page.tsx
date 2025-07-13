@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { SupabaseClient } from '@supabase/supabase-js';
+import './page.css';
 
 interface Question {
   id: string;
@@ -15,7 +17,7 @@ interface PartyMember {
     user_id: string;
 }
 
-const supabase = createClient();
+const supabase = createClient() as unknown as SupabaseClient;
 
 export default function QuestionnairePage() {
   const { code } = useParams();
@@ -68,7 +70,7 @@ export default function QuestionnairePage() {
     };
 
     fetchInitialData();
-  }, [code, router]);
+  }, [code, router, supabase]);
 
   const calculateScores = (answers: string[]) => {
     const counts: Record<string, number> = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
@@ -144,29 +146,29 @@ export default function QuestionnairePage() {
   const { question_text: mainQuestion, answer_options: options } = currentQuestion;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-xl shadow-lg p-8 space-y-6">
-        <div className="text-center">
-          <p className="text-sm font-medium text-gray-500">Question {currentQuestionIndex + 1} of {questions.length}</p>
-          <h2 className="text-2xl font-bold text-gray-800 mt-2">{mainQuestion}?</h2>
+    <div className="questionnaire-container">
+      <div className="questionnaire-card">
+        <div className="question-header">
+          <p className="question-progress">Question {currentQuestionIndex + 1} of {questions.length}</p>
+          <h2 className="question-text">{mainQuestion}?</h2>
         </div>
-        <div className="grid grid-cols-1 gap-4">
+        <div className="answers-grid">
           {options.map((option, index) => (
             <button
               key={index}
               onClick={() => handleAnswer(option)}
-              className="w-full p-4 text-lg font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105"
+              className="answer-button"
             >
               {option}
             </button>
           ))}
         </div>
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-2">Current Ability Scores</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="scores-container">
+          <h3 className="scores-title">Current Ability Scores</h3>
+          <div className="scores-grid">
             {Object.entries(abilityScores).map(([stat, value]) => (
-              <div key={stat} className="bg-gray-100 p-3 rounded-lg">
-                <span className="font-medium">{stat}:</span> {value}
+              <div key={stat} className="score-item">
+                <span className="score-stat">{stat}:</span> {value}
               </div>
             ))}
           </div>

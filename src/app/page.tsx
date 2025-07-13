@@ -3,13 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import './page.css';
 
 type Party = {
   code: string;
@@ -51,18 +45,18 @@ export default function Home() {
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center text-center">
-        <h1 className="font-heading text-7xl text-primary">Friend Party</h1>
-        <div className="w-32 h-px bg-border-primary my-6" />
-        <p className="text-2xl text-text-muted mb-12">
+      <div className="home-container">
+        <h1 className="home-title">Friend Party</h1>
+        <div className="home-divider" />
+        <p className="home-subtitle">
           Gather your allies, assess your bonds, and reveal your party's true nature.
         </p>
-        <Link href="/create" className="font-heading text-3xl text-primary mb-10">
+        <Link href="/create" className="home-link">
           » Forge a New Party «
         </Link>
-        <p className="text-lg text-text-muted mb-4">Or, Join an Existing Party:</p>
-        <form onSubmit={handleJoinParty} className="flex items-center gap-2">
-          <label htmlFor="partyCode" className="sr-only">
+        <p className="home-join-text">Or, Join an Existing Party:</p>
+        <form onSubmit={handleJoinParty} className="home-form">
+          <label htmlFor="partyCode" style={{ display: 'none' }}>
             Party Code
           </label>
           <input
@@ -71,14 +65,14 @@ export default function Home() {
             value={partyCode}
             onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
             maxLength={6}
-            className="w-56 bg-bg-surface border border-border-primary p-2 text-center text-xl tracking-widest placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-secondary"
+            className="home-input"
             placeholder="Enter Party Code"
             required
           />
-          <Button type="submit" variant="secondary" size="lg" className="rounded-none h-full">Join</Button>
+          <button type="submit" className="home-button">Join</button>
         </form>
-        <div className="w-24 h-px bg-border-primary mt-12 mb-4" />
-        <p className="text-sm text-text-muted">© 2025 Friend Party</p>
+        <div className="home-footer-divider" />
+        <p className="home-footer-text">© 2025 Friend Party</p>
       </div>
     </>
   );

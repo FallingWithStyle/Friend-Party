@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/utils/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SupabaseClient } from '@supabase/supabase-js';
+import './PeerQuestionnaire.css';
 
 // Define types for better type safety
 interface Question {
@@ -35,12 +34,19 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Answer[]>>({}); // Member ID -> Answers
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('');
 
   const otherMembers = members.filter((m: PartyMember) => m.user_id !== user?.id);
 
   useEffect(() => {
+    if (otherMembers.length > 0) {
+      setActiveTab(otherMembers[0].id);
+    }
+  }, [members, user]);
+
+  useEffect(() => {
     const fetchQuestions = async () => {
-      const supabase = createClient();
+      const supabase = createClient() as unknown as SupabaseClient;
       const { data, error } = await supabase
         .from('questions')
         .select('*')
@@ -91,7 +97,7 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
         party_code: partyCode,
     }));
     
-    const supabase = createClient();
+    const supabase = createClient() as unknown as SupabaseClient;
     const { error } = await supabase.from('answers').insert(answersToSubmit);
 
     if (error) {
@@ -105,7 +111,7 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
         .eq('user_id', user.id)
         .eq('party_code', partyCode);
 
-      router.push(`/party/${partyCode}/lobby`);
+      router.push(`/party/${partyCode}/results`);
     }
   };
 
@@ -121,50 +127,49 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
 
   return (
-    <Card className="w-full max-w-4xl">
-      <CardHeader>
-        <CardTitle>
+    <div className="peer-questionnaire-card">
+      <div className="question-header">
+        <h2 className="question-title">
           Question {currentQuestionIndex + 1} of {questions.length}
-        </CardTitle>
-        <p className="text-lg">{currentQuestion.question_text}</p>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue={otherMembers[0]?.id} className="w-full">
-          <TabsList>
-            {otherMembers.map((member) => (
-              <TabsTrigger key={member.id} value={member.id}>
-                {member.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+        </h2>
+        <p className="question-text">{currentQuestion.question_text}</p>
+      </div>
+      <div className="tabs-container">
+        <div className="tabs-list">
           {otherMembers.map((member) => (
-            <TabsContent key={member.id} value={member.id}>
-              <div className="flex flex-col space-y-2 mt-4">
-                {(currentQuestion.options || ['Yes', 'No']).map((option) => (
-                  <Button
-                    key={option}
-                    variant={
-                      answers[member.id]?.find(a => a.question_id === currentQuestion.id)?.value === option
-                        ? 'default'
-                        : 'outline'
-                    }
-                    onClick={() => handleAnswer(member.id, currentQuestion.id, option)}
-                  >
-                    {option}
-                  </Button>
-                ))}
-              </div>
-            </TabsContent>
+            <button
+              key={member.id}
+              className="tab-trigger"
+              data-state={activeTab === member.id ? 'active' : 'inactive'}
+              onClick={() => setActiveTab(member.id)}
+            >
+              {member.name}
+            </button>
           ))}
-        </Tabs>
-        <div className="mt-6 flex justify-end">
-          {isLastQuestion ? (
-            <Button onClick={handleSubmit}>Finish & See Results</Button>
-          ) : (
-            <Button onClick={handleNextQuestion}>Next Question</Button>
-          )}
         </div>
-      </CardContent>
-    </Card>
+        {otherMembers.map((member) => (
+          <div key={member.id} className="tab-content" hidden={activeTab !== member.id}>
+            <div className="answers-container">
+              {(currentQuestion.options || ['Yes', 'No']).map((option) => (
+                <button
+                  key={option}
+                  className={`answer-button ${answers[member.id]?.find(a => a.question_id === currentQuestion.id)?.value === option ? 'selected' : ''}`}
+                  onClick={() => handleAnswer(member.id, currentQuestion.id, option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="navigation-buttons">
+        {isLastQuestion ? (
+          <button onClick={handleSubmit} className="nav-button">Finish & See Results</button>
+        ) : (
+          <button onClick={handleNextQuestion} className="nav-button">Next Question</button>
+        )}
+      </div>
+    </div>
   );
 };

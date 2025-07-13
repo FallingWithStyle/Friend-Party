@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
+import './page.css';
 
 export default function CreatePartyPage() {
   const [formData, setFormData] = useState({
@@ -26,7 +27,7 @@ export default function CreatePartyPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errors = { name: '', date: '', location: '' };
+    const errors = { name: '' };
     let hasErrors = false;
 
     if (!formData.name.trim()) {
@@ -34,8 +35,6 @@ export default function CreatePartyPage() {
       hasErrors = true;
     }
     if (!formData.creatorName.trim()) {
-      // This is a new field, so we'll add a simple error message for it.
-      // In a real app, this might be part of the formErrors state.
       alert('Your name is required to create a party.');
       hasErrors = true;
     }
@@ -54,19 +53,19 @@ export default function CreatePartyPage() {
   }, [party, router]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 p-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Create Your Party</h1>
+    <div className="create-party-container">
+      <div className="create-party-card">
+        <h1 className="create-party-title">Create Your Party</h1>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="error-message">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+        <form onSubmit={handleSubmit} className="create-party-form">
+          <div className="form-group">
+            <label htmlFor="name" className="form-label">
               Party Name
             </label>
             <input
@@ -76,13 +75,13 @@ export default function CreatePartyPage() {
               value={formData.name}
               onChange={handleChange}
               required
-              className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border ${formErrors.name ? 'border-red-500' : ''}`}
+              className={`form-input ${formErrors.name ? 'form-error-outline' : ''}`}
             />
-            {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+            {formErrors.name && <p className="form-error">{formErrors.name}</p>}
           </div>
 
-          <div>
-            <label htmlFor="creatorName" className="block text-sm font-medium text-gray-700">
+          <div className="form-group">
+            <label htmlFor="creatorName" className="form-label">
               Your Name (Party Leader)
             </label>
             <input
@@ -92,12 +91,12 @@ export default function CreatePartyPage() {
               value={formData.creatorName}
               onChange={handleChange}
               required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
+              className="form-input"
             />
           </div>
 
-          <div>
-            <label htmlFor="motto" className="block text-sm font-medium text-gray-700">
+          <div className="form-group">
+            <label htmlFor="motto" className="form-label">
               Motto (optional)
             </label>
             <textarea
@@ -106,14 +105,14 @@ export default function CreatePartyPage() {
               value={formData.motto}
               onChange={handleChange}
               rows={3}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
+              className="form-textarea"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="submit-button"
           >
             {loading ? 'Creating Party...' : 'Create Party'}
           </button>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
+import "./layout.css";
 
 export const metadata: Metadata = {
   title: "Friend Party",
@@ -13,9 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-parchment font-body text-text-primary p-8 md:p-16">
-        <div className="max-w-5xl mx-auto p-1.5 bg-border-primary">
-          <div className="bg-bg-primary p-8 md:p-12">
+      <body className="layout-body">
+        <div className="layout-container">
+          <div className="layout-content">
             {children}
           </div>
         </div>

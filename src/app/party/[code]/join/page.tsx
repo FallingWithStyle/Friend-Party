@@ -5,9 +5,10 @@ import { useRouter, useParams } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/utils/supabase/client';
 import Auth from '@/components/Auth';
-import { Session } from '@supabase/supabase-js';
+import { Session, SupabaseClient } from '@supabase/supabase-js';
+import './page.css';
 
-const supabase = createClient();
+const supabase = createClient() as unknown as SupabaseClient;
 
 export default function JoinPartyPage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -51,9 +52,9 @@ export default function JoinPartyPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-800 to-gray-900 p-8 flex items-center justify-center">
-        <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">You need to be logged in to join a party.</h1>
+      <div className="auth-required-container">
+        <div className="auth-required-card">
+          <h1 className="auth-required-title">You need to be logged in to join a party.</h1>
           <Auth redirectUrl={typeof code === 'string' ? `/party/${code}/join` : '/'} />
         </div>
       </div>
@@ -61,13 +62,13 @@ export default function JoinPartyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 p-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Join the Party!</h1>
-        <p className="text-center text-gray-600 mb-4">You are signed in as {session.user.email}.</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+    <div className="join-party-container">
+      <div className="join-party-card">
+        <h1 className="join-party-title">Join the Party!</h1>
+        <p className="user-email-text">You are signed in as {session.user.email}.</p>
+        <form onSubmit={handleSubmit} className="join-party-form">
+          <div className="form-group">
+            <label htmlFor="firstName" className="form-label">
               First Name
             </label>
             <input
@@ -77,11 +78,11 @@ export default function JoinPartyPage() {
               value={formData.firstName}
               onChange={handleChange}
               required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
+              className="form-input"
             />
           </div>
-          <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+          <div className="form-group">
+            <label htmlFor="lastName" className="form-label">
               Last Name (optional)
             </label>
             <input
@@ -90,13 +91,13 @@ export default function JoinPartyPage() {
               name="lastName"
               value={formData.lastName}
               onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 p-2 border"
+              className="form-input"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="submit-button"
           >
             {loading ? 'Joining...' : 'Join Party'}
           </button>

@@ -1,0 +1,38 @@
+.header {
+  background-color: var(--card);
+  color: var(--foreground);
+  padding: 1rem;
+  border-bottom: 4px solid var(--border);
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.logo-link {
+  font-size: 1.5rem;
+  text-decoration: none;
+  color: var(--foreground);
+}
+
+.logo-link:hover {
+  color: var(--primary);
+}
+
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: var(--foreground);
+}
+
+.nav-link:hover {
+  color: var(--primary);
+}

@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { Session } from '@supabase/supabase-js';
+import { Session, SupabaseClient } from '@supabase/supabase-js';
+import './Auth.css';
 
-const supabase = createClient();
+const supabase = createClient() as unknown as SupabaseClient;
 
 export default function Auth({ redirectUrl }: { redirectUrl?: string }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -54,16 +55,16 @@ export default function Auth({ redirectUrl }: { redirectUrl?: string }) {
 
   if (!session) {
     return (
-      <div className="p-4">
-        <form onSubmit={handleLogin}>
+      <div className="auth-container">
+        <form onSubmit={handleLogin} className="auth-form">
           <input
             type="email"
             placeholder="Your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="border p-2 rounded"
+            className="auth-input"
           />
-          <button type="submit" disabled={loading} className="bg-blue-500 text-white p-2 rounded">
+          <button type="submit" disabled={loading} className="auth-button">
             {loading ? 'Sending...' : 'Send magic link'}
           </button>
         </form>
@@ -72,9 +73,9 @@ export default function Auth({ redirectUrl }: { redirectUrl?: string }) {
   }
 
   return (
-    <div className="p-4">
+    <div className="auth-container">
       <p>Signed in as {session.user.email}</p>
-      <button onClick={handleLogout} className="bg-red-500 text-white p-2 rounded">
+      <button onClick={handleLogout} className="logout-button">
         Logout
       </button>
     </div>

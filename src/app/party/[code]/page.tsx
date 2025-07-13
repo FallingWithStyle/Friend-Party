@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/utils/supabase/client';
+import './page.css';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // --- Interfaces ---
 interface Member {
@@ -44,13 +46,12 @@ interface VotingStatus {
   tieProposals: NameProposal[];
 }
 
-const supabase = createClient();
-
 // --- Main Component ---
 export default function PartyLobbyPage() {
   const { code } = useParams();
   const { party, loading, error, getPartyByCode } = usePartyStore();
   const router = useRouter();
+  const supabase = createClient() as unknown as SupabaseClient;
   // --- State ---
   const [members, setMembers] = useState<Member[]>([]);
   const [proposals, setProposals] = useState<NameProposal[]>([]);
@@ -72,7 +73,7 @@ export default function PartyLobbyPage() {
       }
     };
     if (party) fetchUserMember();
-  }, [party]);
+  }, [party, supabase]);
 
   useEffect(() => {
     if (!party) return;
@@ -90,12 +91,12 @@ export default function PartyLobbyPage() {
 
     fetchData();
 
-    const membersSub = supabase.channel(`members:${party.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, payload => {
+    const channel = supabase.channel(`party-lobby-${party.id}`);
+
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload: any) => {
       if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
       if (payload.eventType === 'UPDATE') setMembers(current => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
-    }).subscribe();
-
-    const proposalsSub = supabase.channel(`proposals:${party.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, payload => {
+    }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
       if (payload.eventType === 'INSERT') setProposals(current => [...current, payload.new as NameProposal]);
       if (payload.eventType === 'UPDATE') {
         const updated = payload.new as NameProposal;
@@ -106,20 +107,17 @@ export default function PartyLobbyPage() {
           setProposals(current => current.map(p => p.id === updated.id ? updated : p));
         }
       }
-    }).subscribe();
-
-    const votesSub = supabase.channel(`votes:${party.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, payload => {
+    }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload: any) => {
       // We need to fetch the proposal party_id to ensure it belongs to this party
       // This is a simplified approach for the subscription payload
       setVotes(current => [...current, payload.new as NameProposalVote]);
     }).subscribe();
 
+
     return () => {
-      supabase.removeChannel(membersSub);
-      supabase.removeChannel(proposalsSub);
-      supabase.removeChannel(votesSub);
+      supabase.removeChannel(channel);
     };
-  }, [party]);
+  }, [party, supabase]);
 
   // --- Memoized Vote Counts ---
   const voteCounts = useMemo(() => {
@@ -200,30 +198,30 @@ export default function PartyLobbyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 p-8">
-      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">{party.name}</h1>
-        <p className="text-center text-gray-500 mb-6">Party Code: <span className="font-bold text-purple-600">{party.code}</span></p>
+    <div className="party-lobby-container">
+      <div className="party-lobby-card">
+        <h1 className="party-lobby-title">{party.name}</h1>
+        <p className="party-code">Party Code: <span className="party-code-span">{party.code}</span></p>
         
         {currentUserMember && (currentUserMember.status === 'Joined' || currentUserMember.status === 'Voting') && (
-          <div className="text-center my-6">
+          <div className="start-quest-container">
             <button
               onClick={handleStartQuest}
-              className="px-8 py-4 text-xl font-bold text-white bg-green-600 rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-transform transform hover:scale-105"
+              className="start-quest-button"
             >
               {currentUserMember.status === 'Joined' ? 'Start QUESTionnaire' : 'Continue QUESTionnaire'}
             </button>
           </div>
         )}
 
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Party Members</h2>
-        <div className="space-y-6">
+        <h2 className="members-title">Party Members</h2>
+        <div className="members-container">
           {members.map((member) => {
             if (member.adventurer_name) {
               return (
-                <div key={member.id} className="p-4 border rounded-lg bg-gray-50">
-                  <h3 className="text-xl font-bold text-gray-800">{member.first_name} {member.is_leader && '👑'}</h3>
-                  <p className="text-lg text-purple-600 font-semibold">"{member.adventurer_name}"</p>
+                <div key={member.id} className="member-card">
+                  <h3 className="member-name">{member.first_name} {member.is_leader && '👑'}</h3>
+                  <p className="adventurer-name">"{member.adventurer_name}"</p>
                 </div>
               );
             }
@@ -233,16 +231,16 @@ export default function PartyLobbyPage() {
             const canBreakTie = (currentUserMember?.id === member.id || (currentUserMember?.is_leader && isTie));
 
             return (
-              <div key={member.id} className="p-4 border rounded-lg bg-gray-50">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">{member.first_name} {member.is_leader && '👑'} - Needs a Name!</h3>
+              <div key={member.id} className="member-card">
+                <h3 className="member-name">{member.first_name} {member.is_leader && '👑'} - Needs a Name!</h3>
                 
                 {isTie && canBreakTie && (
-                  <div className="my-4 p-3 bg-yellow-100 border-l-4 border-yellow-500">
-                    <h4 className="font-bold text-yellow-800">Tie-breaker!</h4>
-                    <p className="text-sm text-yellow-700">As the one being named (or Party Leader), you must choose the final name.</p>
-                    <div className="flex gap-2 mt-2">
+                  <div className="tie-breaker-card">
+                    <h4 className="tie-breaker-title">Tie-breaker!</h4>
+                    <p className="tie-breaker-text">As the one being named (or Party Leader), you must choose the final name.</p>
+                    <div className="tie-breaker-buttons">
                       {tieProposals.map(p => (
-                        <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="px-3 py-1 text-sm text-white bg-green-600 hover:bg-green-700 rounded">
+                        <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="choose-name-button">
                           Choose "{p.proposed_name}"
                         </button>
                       ))}
@@ -250,31 +248,31 @@ export default function PartyLobbyPage() {
                   </div>
                 )}
 
-                <div className="space-y-2">
+                <div className="proposals-container">
                   {memberProposals.map(p => (
-                    <div key={p.id} className="flex items-center justify-between">
+                    <div key={p.id} className="proposal-item">
                       <span>{p.proposed_name}</span>
                       <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg text-purple-700">{voteCounts[p.id] || 0}</span>
+                        <span className="vote-count">{voteCounts[p.id] || 0}</span>
                         {canVote && (
-                          <button onClick={() => handleCastVote(p.id)} className="px-3 py-1 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded">Vote</button>
+                          <button onClick={() => handleCastVote(p.id)} className="vote-button">Vote</button>
                         )}
                       </div>
                     </div>
                   ))}
-                  {memberProposals.length === 0 && <p className="text-sm text-gray-500">No names proposed yet.</p>}
+                  {memberProposals.length === 0 && <p className="no-proposals-text">No names proposed yet.</p>}
                 </div>
 
                 {currentUserMember && currentUserMember.id !== member.id && (
-                  <div className="flex items-center space-x-2 pt-4 mt-4 border-t">
+                  <div className="propose-name-container">
                     <input
                       type="text"
                       value={nameProposalInput[member.id] || ''}
                       onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
                       placeholder="Propose a name..."
-                      className="flex-grow p-2 border rounded"
+                      className="propose-name-input"
                     />
-                    <button onClick={() => handleProposeName(member.id)} className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded">
+                    <button onClick={() => handleProposeName(member.id)} className="propose-name-button">
                       Propose
                     </button>
                   </div>

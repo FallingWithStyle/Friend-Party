@@ -1,0 +1,160 @@
+.party-lobby-container {
+  padding: 2rem;
+}
+
+.party-lobby-card {
+  max-width: 56rem;
+  margin: 0 auto;
+  background-color: var(--card);
+  padding: 1.5rem;
+}
+
+.party-lobby-title {
+  font-size: 2rem;
+  font-weight: bold;
+  text-align: center;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.party-code {
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+
+.party-code-span {
+  font-weight: bold;
+  color: var(--secondary);
+}
+
+.start-quest-container {
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+.start-quest-button {
+  padding: 1rem 2rem;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--primary-foreground);
+  background-color: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.members-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.members-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.member-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background-color: var(--background);
+}
+
+.member-name {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.adventurer-name {
+  font-size: 1.125rem;
+  color: var(--secondary);
+  font-weight: 600;
+}
+
+.tie-breaker-card {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background-color: #fefcbf; /* A light yellow */
+  border-left: 4px solid #facc15; /* A yellow color */
+}
+
+.tie-breaker-title {
+  font-weight: bold;
+  color: #713f12; /* A brown color */
+}
+
+.tie-breaker-text {
+  font-size: 0.875rem;
+  color: #854d0e; /* A darker brown */
+}
+
+.tie-breaker-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.choose-name-button {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--primary-foreground);
+  background-color: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.proposals-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.proposal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vote-count {
+  font-weight: bold;
+  font-size: 1.125rem;
+  color: var(--secondary);
+}
+
+.vote-button {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--primary-foreground);
+  background-color: var(--secondary);
+  border: none;
+  cursor: pointer;
+}
+
+.no-proposals-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.propose-name-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.propose-name-input {
+  flex-grow: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.propose-name-button {
+  padding: 0.5rem 1rem;
+  color: var(--primary-foreground);
+  background-color: var(--primary);
+  border: none;
+  cursor: pointer;
+}

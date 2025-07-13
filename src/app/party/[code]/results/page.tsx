@@ -2,6 +2,8 @@
 
 import { use, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { SupabaseClient } from '@supabase/supabase-js';
+import './page.css';
 
 type PartyMember = {
   id: string;
@@ -20,7 +22,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
+  const supabase = createClient() as unknown as SupabaseClient;
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -72,22 +74,22 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
   if (partyMembers.length < 3) {
     return (
-      <div className="container mx-auto p-4 text-center">
-        <h1 className="text-2xl font-bold mb-4">Waiting for More Players</h1>
+      <div className="waiting-container">
+        <h1 className="waiting-title">Waiting for More Players</h1>
         <p>The results will be calculated once more players have finished the questionnaire.</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Party Results</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="results-container">
+      <h1 className="results-title">Party Results</h1>
+      <div className="results-grid">
         {partyMembers.map((member) => (
-          <div key={member.id} className="border p-4 rounded-lg">
-            <h2 className="text-xl font-semibold">{member.first_name}</h2>
-            <p><strong>Class:</strong> {member.class}</p>
-            <ul>
+          <div key={member.id} className="member-results-card">
+            <h2 className="member-name">{member.first_name}</h2>
+            <p><strong className="member-class">Class:</strong> {member.class}</p>
+            <ul className="stats-list">
               <li><strong>Strength:</strong> {member.strength}</li>
               <li><strong>Dexterity:</strong> {member.dexterity}</li>
               <li><strong>Charisma:</strong> {member.charisma}</li>

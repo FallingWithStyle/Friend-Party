@@ -4,6 +4,7 @@ import { PeerQuestionnaire } from '@/components/common/PeerQuestionnaire';
 import usePartyStore from '@/store/partyStore';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import './page.css';
 
 export default function PeerAssessmentPage({ params }: { params: { code: string } }) {
   const router = useRouter();
@@ -16,8 +17,8 @@ export default function PeerAssessmentPage({ params }: { params: { code: string 
   }, [party, params.code, router]);
 
   return (
-    <div className="container mx-auto flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-4xl font-bold mb-8">Peer Assessment</h1>
+    <div className="peer-assessment-container">
+      <h1 className="peer-assessment-title">Peer Assessment</h1>
       <PeerQuestionnaire partyCode={params.code} />
     </div>
   );
