@@ -11,7 +11,8 @@ interface Party {
 interface PartyMember {
   id: string;
   user_id: string;
-  name: string;
+  first_name: string;
+  last_name: string | null;
   status: 'Joined' | 'Voting' | 'Finished';
 }
 
@@ -26,7 +27,7 @@ interface PartyState {
   user: User | null;
   loading: boolean;
   error: string | null;
-  createParty: (partyData: Omit<Party, 'id' | 'code'>) => Promise<void>;
+  createParty: (partyData: Omit<Party, 'id' | 'code'> & { creatorName: string }) => Promise<void>;
   getPartyByCode: (code: string) => Promise<void>;
   joinParty: (code: string, memberData: { firstName: string; lastName: string }) => Promise<void>;
   setParty: (party: Party, members: PartyMember[]) => void;
@@ -55,7 +56,8 @@ const usePartyStore = create<PartyState>((set) => ({
       if (!response.ok) {
         throw new Error(result.error || 'Failed to create party');
       }
-      set({ party: result, loading: false });
+      const { members, ...party } = result;
+      set({ party, members, loading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ loading: false, error: errorMessage });
@@ -95,9 +97,8 @@ const usePartyStore = create<PartyState>((set) => ({
       if (!response.ok) {
         throw new Error(result.error || 'Failed to join party');
       }
-      // We don't need to set the party here, as the user will be redirected
-      // to the lobby, which will fetch the party details.
-      set({ loading: false });
+      const { members, ...party } = result;
+      set({ party, members, loading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ loading: false, error: errorMessage });

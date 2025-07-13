@@ -58,6 +58,7 @@ export default function PartyLobbyPage() {
   const [votes, setVotes] = useState<NameProposalVote[]>([]);
   const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
   const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
+  const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
 
   // --- Effects ---
   useEffect(() => {
@@ -176,6 +177,29 @@ export default function PartyLobbyPage() {
     }
   };
 
+  // Check assessment completion status
+  useEffect(() => {
+    const checkAssessmentStatus = async () => {
+      if (!currentUserMember || !party) return;
+
+      try {
+        const response = await fetch(`/api/party/${code}/assessment-status`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAssessmentsCompleted(data.selfCompleted && data.peerCompleted);
+        }
+      } catch (error) {
+        console.error('Error checking assessment status:', error);
+      }
+    };
+
+    checkAssessmentStatus();
+  }, [currentUserMember, party, code]);
+
   // --- Render Logic ---
   if (loading) return <div className="text-center p-8">Loading Party...</div>;
   if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
@@ -203,14 +227,27 @@ export default function PartyLobbyPage() {
         <h1 className="party-lobby-title">{party.name}</h1>
         <p className="party-code">Party Code: <span className="party-code-span">{party.code}</span></p>
         
-        {currentUserMember && (currentUserMember.status === 'Joined' || currentUserMember.status === 'Voting') && (
-          <div className="start-quest-container">
-            <button
-              onClick={handleStartQuest}
-              className="start-quest-button"
-            >
-              {currentUserMember.status === 'Joined' ? 'Start QUESTionnaire' : 'Continue QUESTionnaire'}
-            </button>
+        {currentUserMember && (
+          <div className="navigation-container">
+            {assessmentsCompleted ? (
+              <div className="navigation-buttons">
+                <button
+                  onClick={() => router.push(`/party/${code}/results`)}
+                  className="navigation-button"
+                >
+                  View Results
+                </button>
+              </div>
+            ) : (
+              <div className="navigation-buttons">
+                <button
+                  onClick={handleStartQuest}
+                  className="navigation-button"
+                >
+                  {currentUserMember.status === 'Joined' ? 'Start QUESTionnaire' : 'Continue QUESTionnaire'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -56,12 +56,33 @@
   padding: 0.75rem;
   border: 1px solid var(--border);
   background-color: var(--background);
+  color: var(--foreground);
   cursor: pointer;
 }
 
 .answer-button.selected {
   background-color: var(--primary);
   color: var(--primary-foreground);
+  transform: scale(1.05);
+  box-shadow: 0 0 0 2px var(--primary), 0 0 0 4px rgba(var(--primary-rgb), 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.answer-button.selected::after {
+  content: "✓";
+  position: absolute;
+  right: 10px;
+  font-weight: bold;
+}
+
+.answer-button {
+  transition: all 0.2s ease;
+}
+
+.answer-button:hover:not(.selected) {
+  transform: scale(1.02);
+  box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.2);
 }
 
 .navigation-buttons {

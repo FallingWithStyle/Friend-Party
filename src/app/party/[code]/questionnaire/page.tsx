@@ -6,10 +6,15 @@ import { createClient } from '@/utils/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 import './page.css';
 
+interface AnswerOption {
+  text: string;
+  stat: string;
+}
+
 interface Question {
   id: string;
   question_text: string;
-  answer_options: string[];
+  answer_options: AnswerOption[];
 }
 
 interface PartyMember {
@@ -34,6 +39,7 @@ export default function QuestionnairePage() {
     WIS: 0,
     CHA: 0
   });
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -62,7 +68,7 @@ export default function QuestionnairePage() {
         .from('questions')
         .select('id, question_text, answer_options')
         .eq('question_type', 'self-assessment');
-      
+
       if (questionData) {
         setQuestions(questionData);
       }
@@ -72,44 +78,36 @@ export default function QuestionnairePage() {
     fetchInitialData();
   }, [code, router, supabase]);
 
-  const calculateScores = (answers: string[]) => {
-    const counts: Record<string, number> = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
-    answers.forEach(answer => {
-      if (Object.keys(counts).includes(answer)) {
-        counts[answer] = (counts[answer] || 0) + 1;
-      }
-    });
-    return {
-      STR: counts.STR * 2,
-      DEX: counts.DEX * 2,
-      CON: counts.CON * 2,
-      INT: counts.INT * 2,
-      WIS: counts.WIS * 2,
-      CHA: counts.CHA * 2
-    };
-  };
-
-  const handleAnswer = async (answer: string) => {
+  const handleAnswer = async (option: AnswerOption) => {
     if (!currentUserMember || !questions[currentQuestionIndex]) return;
 
     const currentQuestion = questions[currentQuestionIndex];
-    const newScores = calculateScores([answer]);
-    setAbilityScores(newScores);
+
+    // Update the answers state
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion.id]: option.stat
+    }));
+
+    setAbilityScores(prevScores => {
+      const newCounts = { ...prevScores };
+      newCounts[option.stat as keyof typeof newCounts] = (newCounts[option.stat as keyof typeof newCounts] || 0) + 1;
+      return newCounts;
+    });
 
     const { error } = await supabase.from('answers').insert({
       question_id: currentQuestion.id,
       voter_member_id: currentUserMember.id,
-      subject_member_id: currentUserMember.id, // For self-assessment, voter and subject are the same
-      answer_value: answer,
+      subject_member_id: currentUserMember.id,
+      answer_value: option.stat,
     });
 
     if (error) {
       console.error('Error saving answer:', error);
-      // Optionally, show an error to the user
       return;
     }
 
-    // Move to the next question or finish
+    // Automatically move to the next question or finish
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
@@ -125,11 +123,10 @@ export default function QuestionnairePage() {
           throw new Error('Failed to finish questionnaire');
         }
 
-        // Redirect to the results page
-        router.push(`/party/${code}/results`);
+        // Redirect to the peer assessment page
+        router.push(`/party/${code}/questionnaire/peer`);
       } catch (error) {
         console.error('Error finishing questionnaire:', error);
-        // Optionally, show an error to the user
       }
     }
   };
@@ -146,32 +143,35 @@ export default function QuestionnairePage() {
   const { question_text: mainQuestion, answer_options: options } = currentQuestion;
 
   return (
-    <div className="questionnaire-container">
-      <div className="questionnaire-card">
-        <div className="question-header">
-          <p className="question-progress">Question {currentQuestionIndex + 1} of {questions.length}</p>
-          <h2 className="question-text">{mainQuestion}?</h2>
-        </div>
-        <div className="answers-grid">
-          {options.map((option, index) => (
+    <div className="peer-questionnaire-card">
+      <div className="question-header">
+        <h2 className="question-title">
+          Question {currentQuestionIndex + 1} of {questions.length}
+        </h2>
+        <p className="question-text">{mainQuestion}?</p>
+      </div>
+      <div className="answers-container">
+        {options.map((option, index) => {
+          const isSelected = answers[currentQuestion.id] === option.stat;
+          return (
             <button
               key={index}
+              className={`answer-button ${isSelected ? 'selected' : ''}`}
               onClick={() => handleAnswer(option)}
-              className="answer-button"
             >
-              {option}
+              {option.text}
             </button>
+          );
+        })}
+      </div>
+      <div className="scores-container">
+        <h3 className="scores-title">Current Ability Scores</h3>
+        <div className="scores-grid">
+          {Object.entries(abilityScores).map(([stat, value]) => (
+            <div key={stat} className="score-item">
+              <span className="score-stat">{stat}:</span> {value}
+            </div>
           ))}
-        </div>
-        <div className="scores-container">
-          <h3 className="scores-title">Current Ability Scores</h3>
-          <div className="scores-grid">
-            {Object.entries(abilityScores).map(([stat, value]) => (
-              <div key={stat} className="score-item">
-                <span className="score-stat">{stat}:</span> {value}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

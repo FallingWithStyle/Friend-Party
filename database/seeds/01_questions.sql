@@ -6,26 +6,26 @@ DELETE FROM public.questions;
 
 -- Self-Assessment Questions
 INSERT INTO public.questions (question_text, question_type, answer_options) VALUES
-('You find a mysterious, glowing potion. What do you do?', 'self-assessment', '{"Drink it immediately", "Try to identify it first", "Offer it to a friend to test"}'),
-('When planning a group trip, what role do you take?', 'self-assessment', '{"The one with the detailed spreadsheet", "The one who just shows up", "The one who convinces everyone to go somewhere completely different"}'),
-('A heated debate breaks out at a dinner party. How do you react?', 'self-assessment', '{"Mediate to find common ground", "Use facts and logic to win", "Create a diversion with a hilarious story"}'),
-('Your team is facing a tight deadline. What''s your approach?', 'self-assessment', '{"Staying up all night to get it done", "Finding a clever shortcut", "Keeping morale high with snacks and encouragement"}'),
-('You''re given a complex gadget with no instructions. What''s your first move?', 'self-assessment', '{"Start pressing buttons randomly", "Read the manual cover-to-cover", "Try to build something even better with the parts"}'),
-('When you enter a room, what do you tend to do?', 'self-assessment', '{"Command attention naturally", "Blend into the background", "Observe quietly from a corner"}'),
-('What does your ideal weekend involve?', 'self-assessment', '{"A strenuous mountain hike", "A competitive board game tournament", "A relaxing day with a good book"}'),
-('If you had to survive in the wilderness, what would be your greatest asset?', 'self-assessment', '{"Your physical endurance", "Your knowledge of edible plants", "Your ability to befriend a bear"}'),
-('You''re offered a choice of one superpower. Which do you choose?', 'self-assessment', '{"Super strength", "The ability to read minds", "The power of flight"}'),
-('When assembling furniture, what''s your style?', 'self-assessment', '{"Follow the instructions perfectly", "Improvise when a piece doesn''t fit", "End up with a unique creation and some leftover screws"}'),
-('Who is more likely to successfully negotiate with a grumpy troll?', 'self-assessment', '{"The one with a silver tongue", "The one with a compelling argument"}'),
-('When lost in a dense forest, who would you trust more to lead the way out?', 'self-assessment', '{"The one with a keen sense of direction", "The one who seems to have an encyclopedic knowledge of nature"}'),
-('If a priceless artifact is protected by a maze of laser beams, who is more likely to get through unscathed?', 'self-assessment', '{"The nimble acrobat", "The clever strategist who finds the off switch"}'),
-('A friendly tavern brawl breaks out. Who would you rather have on your side?', 'self-assessment', '{"The person who can take a punch", "The person who can end the fight with a single, intimidating glare"}'),
-('Faced with a cryptic, ancient riddle, who is more likely to solve it?', 'self-assessment', '{"The one who pores over dusty tomes for the answer", "The one who has a sudden, brilliant flash of insight"}'),
-('When the party is ambushed by goblins, who is more likely to have the perfect, unexpected item in their backpack to save the day?', 'self-assessment', '{"The meticulous planner", "The bold improviser"}'),
-('At a royal ball, who is more likely to charm the entire court?', 'self-assessment', '{"The one with the most dazzling dance moves", "The one with the most captivating stories"}'),
-('A rickety rope bridge spans a deep chasm. Who is more likely to test it first?', 'self-assessment', '{"The one who tests it first", "The one who finds a safer way around"}'),
-('If the party is captured, who is more likely to devise the escape plan?', 'self-assessment', '{"The meticulous planner who accounts for every detail", "The bold improviser who creates chaos"}'),
-('Who is the better storyteller around the campfire?', 'self-assessment', '{"The one who weaves epic tales of heroism", "The one who tells spine-chilling ghost stories"}');
+('You find a mysterious, glowing potion. What do you do?', 'self-assessment', '[{"text": "Drink it immediately", "stat": "CON"}, {"text": "Try to identify it first", "stat": "INT"}, {"text": "Offer it to a friend to test", "stat": "CHA"}]'),
+('When planning a group trip, what role do you take?', 'self-assessment', '[{"text": "The one with the detailed spreadsheet", "stat": "INT"}, {"text": "The one who just shows up", "stat": "CON"}, {"text": "The one who convinces everyone to go somewhere completely different", "stat": "CHA"}]'),
+('A heated debate breaks out at a dinner party. How do you react?', 'self-assessment', '[{"text": "Mediate to find common ground", "stat": "WIS"}, {"text": "Use facts and logic to win", "stat": "INT"}, {"text": "Create a diversion with a hilarious story", "stat": "CHA"}]'),
+('Your team is facing a tight deadline. What''s your approach?', 'self-assessment', '[{"text": "Staying up all night to get it done", "stat": "CON"}, {"text": "Finding a clever shortcut", "stat": "INT"}, {"text": "Keeping morale high with snacks and encouragement", "stat": "CHA"}]'),
+('You''re given a complex gadget with no instructions. What''s your first move?', 'self-assessment', '[{"text": "Start pressing buttons randomly", "stat": "DEX"}, {"text": "Read the manual cover-to-cover", "stat": "INT"}, {"text": "Try to build something even better with the parts", "stat": "WIS"}]'),
+('When you enter a room, what do you tend to do?', 'self-assessment', '[{"text": "Command attention naturally", "stat": "CHA"}, {"text": "Blend into the background", "stat": "DEX"}, {"text": "Observe quietly from a corner", "stat": "WIS"}]'),
+('What does your ideal weekend involve?', 'self-assessment', '[{"text": "A strenuous mountain hike", "stat": "STR"}, {"text": "A competitive board game tournament", "stat": "INT"}, {"text": "A relaxing day with a good book", "stat": "WIS"}]'),
+('If you had to survive in the wilderness, what would be your greatest asset?', 'self-assessment', '[{"text": "Your physical endurance", "stat": "CON"}, {"text": "Your knowledge of edible plants", "stat": "INT"}, {"text": "Your ability to befriend a bear", "stat": "CHA"}]'),
+('You''re offered a choice of one superpower. Which do you choose?', 'self-assessment', '[{"text": "Super strength", "stat": "STR"}, {"text": "The ability to read minds", "stat": "INT"}, {"text": "The power of flight", "stat": "DEX"}]'),
+('When assembling furniture, what''s your style?', 'self-assessment', '[{"text": "Follow the instructions perfectly", "stat": "INT"}, {"text": "Improvise when a piece doesn''t fit", "stat": "DEX"}, {"text": "End up with a unique creation and some leftover screws", "stat": "WIS"}]'),
+('Who is more likely to successfully negotiate with a grumpy troll?', 'self-assessment', '[{"text": "The one with a silver tongue", "stat": "CHA"}, {"text": "The one with a compelling argument", "stat": "INT"}]'),
+('When lost in a dense forest, who would you trust more to lead the way out?', 'self-assessment', '[{"text": "The one with a keen sense of direction", "stat": "WIS"}, {"text": "The one who seems to have an encyclopedic knowledge of nature", "stat": "INT"}]'),
+('If a priceless artifact is protected by a maze of laser beams, who is more likely to get through unscathed?', 'self-assessment', '[{"text": "The nimble acrobat", "stat": "DEX"}, {"text": "The clever strategist who finds the off switch", "stat": "INT"}]'),
+('A friendly tavern brawl breaks out. Who would you rather have on your side?', 'self-assessment', '[{"text": "The person who can take a punch", "stat": "CON"}, {"text": "The person who can end the fight with a single, intimidating glare", "stat": "CHA"}]'),
+('Faced with a cryptic, ancient riddle, who is more likely to solve it?', 'self-assessment', '[{"text": "The one who pores over dusty tomes for the answer", "stat": "INT"}, {"text": "The one who has a sudden, brilliant flash of insight", "stat": "WIS"}]'),
+('When the party is ambushed by goblins, who is more likely to have the perfect, unexpected item in their backpack to save the day?', 'self-assessment', '[{"text": "The meticulous planner", "stat": "INT"}, {"text": "The bold improviser", "stat": "DEX"}]'),
+('At a royal ball, who is more likely to charm the entire court?', 'self-assessment', '[{"text": "The one with the most dazzling dance moves", "stat": "DEX"}, {"text": "The one with the most captivating stories", "stat": "CHA"}]'),
+('A rickety rope bridge spans a deep chasm. Who is more likely to test it first?', 'self-assessment', '[{"text": "The one who tests it first", "stat": "STR"}, {"text": "The one who finds a safer way around", "stat": "WIS"}]'),
+('If the party is captured, who is more likely to devise the escape plan?', 'self-assessment', '[{"text": "The meticulous planner who accounts for every detail", "stat": "INT"}, {"text": "The bold improviser who creates chaos", "stat": "DEX"}]'),
+('Who is the better storyteller around the campfire?', 'self-assessment', '[{"text": "The one who weaves epic tales of heroism", "stat": "CHA"}, {"text": "The one who tells spine-chilling ghost stories", "stat": "WIS"}]');
 
 -- Peer-Assessment Questions
 INSERT INTO public.questions (question_text, question_type, answer_options) VALUES

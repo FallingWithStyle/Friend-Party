@@ -21,11 +21,13 @@ DROP POLICY IF EXISTS "Allow users to be added to parties" ON public.party_membe
 DROP POLICY IF EXISTS "Allow public read for parties" ON public.parties;
 DROP POLICY IF EXISTS "Allow users to read parties they are a member of" ON public.parties;
 DROP POLICY IF EXISTS "Allow authenticated users to create parties" ON public.parties;
+DROP POLICY IF EXISTS "Allow authenticated users to read their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Allow authenticated users to insert their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Allow authenticated users to update their own profile" ON public.profiles;
 
 -- Drop Functions
 DROP FUNCTION IF EXISTS public.is_party_member(uuid, uuid);
-DROP FUNCTION IF EXISTS public.create_party_with_leader(text, text, text, text, text);
-DROP FUNCTION IF EXISTS public.create_party_and_leader(text, text, text, text, text);
+DROP FUNCTION IF EXISTS public.create_party_with_leader(text, text, text, text, uuid);
 
 -- Drop Tables
 DROP TABLE IF EXISTS public.stats CASCADE;
@@ -45,6 +47,17 @@ CREATE TABLE IF NOT EXISTS public.stats (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL
 );
+
+-- Create the profiles table to store user profile information
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    first_name TEXT,
+    last_name TEXT,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.profiles IS 'Stores user profile information including names.';
 COMMENT ON TABLE public.stats IS 'Stores the core D&D-style stats.';
 
 INSERT INTO public.stats (id, name) VALUES
@@ -53,7 +66,8 @@ INSERT INTO public.stats (id, name) VALUES
 ('CON', 'Constitution'),
 ('INT', 'Intelligence'),
 ('WIS', 'Wisdom'),
-('CHA', 'Charisma');
+('CHA', 'Charisma')
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.parties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -95,7 +109,7 @@ CREATE TABLE IF NOT EXISTS public.questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_text TEXT NOT NULL,
     question_type TEXT NOT NULL,
-    answer_options TEXT[] NOT NULL,
+    answer_options JSONB NOT NULL,
     stat_id TEXT REFERENCES public.stats(id),
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -148,40 +162,14 @@ CREATE TABLE IF NOT EXISTS public.party_motto_proposals (
 COMMENT ON TABLE public.party_motto_proposals IS 'Stores proposed mottos for the party.';
 
 
--- == IMPORTANT NOTE ON SECURITY DEFINER ==
--- The `create_party_with_leader` function uses `SECURITY DEFINER`. This is a critical security-related setting.
---
--- What it does:
--- `SECURITY DEFINER` makes the function execute with the permissions of the user who *defined* the function (the "owner"),
--- not the user who is *calling* it. In Supabase, this is typically a superuser role.
---
--- Why it's necessary here:
--- This function needs to perform multiple actions in a single transaction:
---   1. INSERT a new row into the `parties` table.
---   2. INSERT a new row into the `party_members` table.
---   3. SELECT the newly created party data to return it.
---
--- The problem arises with Row-Level Security (RLS). Our RLS policy on `parties` states that a user can only read a party's details if they are a member of it.
--- When the function runs, the transaction is not fully committed until the very end. This means that when the final `SELECT` statement runs inside the function,
--- the calling user is not *yet* officially a member of the party, so RLS blocks the read, causing the function to fail.
---
--- By using `SECURITY DEFINER`, the function temporarily bypasses the calling user's RLS policies for the duration of its execution,
--- allowing it to successfully insert the records and return the result.
---
--- Security Implications:
--- Because `SECURITY DEFINER` functions run with elevated privileges, they must be written very carefully to prevent misuse.
--- Any parameters passed to them should be handled securely to avoid SQL injection or unintended side effects.
--- In this case, the function is safe as it only uses the provided parameters for `INSERT` operations.
---
--- DO NOT REMOVE `SECURITY DEFINER` from this function without a deep understanding of the RLS implications.
 -- == 3. CREATE FUNCTIONS ==
 
 CREATE OR REPLACE FUNCTION public.create_party_with_leader(
-  party_code TEXT,
-  party_name TEXT,
-  party_motto TEXT,
-  leader_name TEXT,
-  leader_email TEXT
+  p_party_code TEXT,
+  p_party_name TEXT,
+  p_party_motto TEXT,
+  p_leader_name TEXT,
+  p_leader_user_id UUID
 )
 RETURNS JSON AS $$
 DECLARE
@@ -189,13 +177,19 @@ DECLARE
   new_party JSON;
 BEGIN
   INSERT INTO public.parties (code, name, motto)
-  VALUES (party_code, party_name, party_motto)
+  VALUES (p_party_code, p_party_name, p_party_motto)
   RETURNING id INTO new_party_id;
 
-  INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, email)
-  VALUES (new_party_id, auth.uid(), leader_name, true, leader_email);
+  INSERT INTO public.party_members (party_id, user_id, first_name, is_leader)
+  VALUES (new_party_id, p_leader_user_id, p_leader_name, true);
 
-  SELECT json_build_object('id', p.id, 'code', p.code, 'name', p.name, 'motto', p.motto)
+  SELECT json_build_object(
+    'id', p.id,
+    'code', p.code,
+    'name', p.name,
+    'motto', p.motto,
+    'user_id', p_leader_user_id
+  )
   INTO new_party
   FROM public.parties p
   WHERE p.id = new_party_id;
@@ -225,9 +219,23 @@ ALTER TABLE public.answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.party_motto_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow authenticated users to create parties" ON public.parties FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Allow users to read parties they are a member of" ON public.parties FOR SELECT TO authenticated USING (is_party_member(id, auth.uid()));
+CREATE POLICY "Allow users to read parties they are a member of" ON public.parties FOR SELECT TO authenticated USING (true);
+
+-- Policies for public.profiles
+CREATE POLICY "Allow authenticated users to read their own profile"
+ON public.profiles FOR SELECT TO authenticated
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Allow authenticated users to insert their own profile"
+ON public.profiles FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Allow authenticated users to update their own profile"
+ON public.profiles FOR UPDATE TO authenticated
+USING (auth.uid() = user_id);
 
 CREATE POLICY "Allow users to be added to parties" ON public.party_members FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Allow users to see members of their own parties" ON public.party_members FOR SELECT TO authenticated USING (is_party_member(party_id, auth.uid()) OR user_id = auth.uid());
@@ -314,21 +322,25 @@ BEGIN
     -- Add Patrick (as leader)
     INSERT INTO public.party_members (party_id, user_id, first_name, is_leader)
     VALUES (fellowship_party_id, patrick_user_id, 'Patrick', true)
+    ON CONFLICT (party_id, user_id) DO NOTHING
     RETURNING id INTO patrick_member_id;
 
     -- Add Gandalf
     INSERT INTO public.party_members (party_id, user_id, first_name)
     VALUES (fellowship_party_id, gandalf_user_id, 'Gandalf')
+    ON CONFLICT (party_id, user_id) DO NOTHING
     RETURNING id INTO gandalf_member_id;
 
     -- Add Frodo
     INSERT INTO public.party_members (party_id, user_id, first_name)
     VALUES (fellowship_party_id, frodo_user_id, 'Frodo')
+    ON CONFLICT (party_id, user_id) DO NOTHING
     RETURNING id INTO frodo_member_id;
 
     -- Add Samwise
     INSERT INTO public.party_members (party_id, user_id, first_name)
     VALUES (fellowship_party_id, samwise_user_id, 'Samwise')
+    ON CONFLICT (party_id, user_id) DO NOTHING
     RETURNING id INTO samwise_member_id;
 
     -- Add self-assessment answers for all members
@@ -340,7 +352,8 @@ BEGIN
       FOREACH member_id IN ARRAY member_ids
       LOOP
         INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
-        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int]);
+        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int])
+        ON CONFLICT DO NOTHING;
       END LOOP;
     END LOOP;
 

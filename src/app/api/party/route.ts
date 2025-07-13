@@ -26,11 +26,11 @@ export async function POST(request: Request) {
     while (attempts < maxAttempts) {
       const partyCode = generatePartyCode();
       const { data, error: rpcError } = await supabase.rpc('create_party_with_leader', {
-        party_code: partyCode,
-        party_name: name,
-        party_motto: motto,
-        leader_name: creatorName,
-        leader_email: user.email,
+        p_party_code: partyCode,
+        p_party_name: name,
+        p_party_motto: motto,
+        p_leader_name: creatorName,
+        p_leader_user_id: user.id,
       });
 
       if (rpcError) {
@@ -52,7 +52,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create a unique party' }, { status: 500 });
     }
 
-    return NextResponse.json(newParty, { status: 201 });
+    // Manually construct the response to match what the client expects
+    const response = {
+      ...newParty,
+      user: {
+        id: user.id,
+        email: user.email,
+      }
+    };
+
+    return NextResponse.json(response, { status: 201 });
 
   } catch (error) {
     console.error('Error creating party:', error);

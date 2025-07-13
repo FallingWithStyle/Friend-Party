@@ -27,7 +27,6 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
   useEffect(() => {
     const fetchResults = async () => {
       try {
-        // 1. Get party ID from code
         const { data: partyData, error: partyError } = await supabase
           .from('parties')
           .select('id')
@@ -39,21 +38,13 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
         const partyId = partyData.id;
 
-        // 2. Get all members of the party
         const { data: membersData, error: membersError } = await supabase
           .from('party_members')
           .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class')
           .eq('party_id', partyId);
 
         if (membersError) throw membersError;
-
-        // 3. Check if there are enough members to show results
-        if (membersData && membersData.length < 3) {
-          // Not enough members yet, you can set a specific state for this
-          setPartyMembers([]); // Or a specific message
-        } else {
-          setPartyMembers(membersData || []);
-        }
+        setPartyMembers(membersData || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -61,7 +52,43 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
       }
     };
 
-    fetchResults();
+    const pollForResults = async () => {
+      let attempts = 0;
+      const maxAttempts = 10;
+      const interval = 3000; // 3 seconds
+
+      const poll = async (resolve: (value: unknown) => void, reject: (reason?: any) => void) => {
+        if (attempts >= maxAttempts) {
+          return reject(new Error('Timeout waiting for results.'));
+        }
+
+        const { data: party, error } = await supabase
+          .from('parties')
+          .select('status')
+          .eq('code', code)
+          .single();
+
+        if (error) return reject(error);
+
+        if (party?.status === 'ResultsReady') {
+          return resolve(true);
+        } else {
+          attempts++;
+          setTimeout(() => poll(resolve, reject), interval);
+        }
+      };
+
+      return new Promise(poll);
+    };
+
+    pollForResults()
+      .then(() => {
+        fetchResults();
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [code, supabase]);
 
   if (loading) {
@@ -72,14 +99,6 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     return <div>Error: {error}</div>;
   }
 
-  if (partyMembers.length < 3) {
-    return (
-      <div className="waiting-container">
-        <h1 className="waiting-title">Waiting for More Players</h1>
-        <p>The results will be calculated once more players have finished the questionnaire.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="results-container">

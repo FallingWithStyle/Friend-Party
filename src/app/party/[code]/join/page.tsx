@@ -12,6 +12,7 @@ const supabase = createClient() as unknown as SupabaseClient;
 
 export default function JoinPartyPage() {
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -32,7 +33,26 @@ export default function JoinPartyPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [session]);
+
+  useEffect(() => {
+    if (session) {
+      const fetchProfile = async () => {
+        const response = await fetch('/api/profile');
+        const data = await response.json();
+        setProfile(data);
+
+        // If profile has names, pre-fill the form
+        if (data && data.first_name && data.last_name) {
+          setFormData({
+            firstName: data.first_name,
+            lastName: data.last_name
+          });
+        }
+      };
+      fetchProfile();
+    }
+  }, [session]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -67,33 +87,37 @@ export default function JoinPartyPage() {
         <h1 className="join-party-title">Join the Party!</h1>
         <p className="user-email-text">You are signed in as {session.user.email}.</p>
         <form onSubmit={handleSubmit} className="join-party-form">
-          <div className="form-group">
-            <label htmlFor="firstName" className="form-label">
-              First Name
-            </label>
-            <input
-              type="text"
-              id="firstName"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              required
-              className="form-input"
+          {!profile?.first_name && (
+            <div className="form-group">
+              <label htmlFor="firstName" className="form-label">
+                First Name
+              </label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                required={!profile?.first_name}
+                className="form-input"
             />
           </div>
-          <div className="form-group">
-            <label htmlFor="lastName" className="form-label">
-              Last Name (optional)
-            </label>
-            <input
-              type="text"
-              id="lastName"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="form-input"
-            />
-          </div>
+          )}
+          {!profile?.last_name && (
+            <div className="form-group">
+              <label htmlFor="lastName" className="form-label">
+                Last Name (optional)
+              </label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="form-input"
+              />
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}

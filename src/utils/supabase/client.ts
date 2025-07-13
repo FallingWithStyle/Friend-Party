@@ -128,7 +128,6 @@ export function createClient() {
       throw error;
     }
   };
-  };
 
   // Add the wrapper methods to the client
   (client as any).query = (tableName: string, options?: any) =>

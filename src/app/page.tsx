@@ -3,36 +3,46 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/useAuth'; // Reintroduce useAuth
 import './page.css';
 
-type Party = {
+interface Party {
   code: string;
   name: string;
-};
+}
+
+
 
 export default function Home() {
   const [partyCode, setPartyCode] = useState('');
   const [joinedParties, setJoinedParties] = useState<Party[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
+  const { user } = useAuth(); // Get user from useAuth
 
   useEffect(() => {
-    const fetchParties = async () => {
-      try {
-        const response = await fetch('/api/user/parties');
-        if (response.ok) {
-          const data = await response.json();
-          setJoinedParties(data);
+    const fetchJoinedParties = async () => {
+      if (user) { // Only fetch if user is logged in
+        try {
+          const partiesResponse = await fetch('/api/user/parties');
+          if (partiesResponse.ok) {
+            const partiesData = await partiesResponse.json();
+            setJoinedParties(partiesData);
+          }
+        } catch (error) {
+          console.error('Failed to fetch joined parties:', error);
         }
-      } catch (error) {
-        console.error('Failed to fetch joined parties:', error);
-      } finally {
-        setIsLoading(false);
+      } else {
+        setJoinedParties([]); // Clear parties if user logs out
       }
     };
 
-    fetchParties();
-  }, []);
+    fetchJoinedParties();
+  }, [user]); // Add user to dependencies
+
 
   const handleJoinParty = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,17 +53,65 @@ export default function Home() {
     }
   };
 
+
+  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setMagicLinkSent(true);
+    } catch (error) {
+      console.error('Error sending magic link:', error);
+      alert('Failed to send magic link. Please try again.');
+    }
+  };
+
   return (
     <>
       <div className="home-container">
         <h1 className="home-title">Friend Party</h1>
-        <div className="home-divider" />
-        <p className="home-subtitle">
-          Gather your allies, assess your bonds, and reveal your party's true nature.
-        </p>
+
+        {user ? (
+          <div className="magic-link-section">
+            <p className="text-lg text-gray-700">Signed in as {user.email}</p>
+            <Link href="/profile" className="home-link mt-2">
+              » View Profile «
+            </Link>
+          </div>
+        ) : (
+          <div className="magic-link-section">
+            <form onSubmit={handleMagicLinkSignIn} className="magic-link-form">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email for magic link"
+                className="magic-link-input"
+                required
+              />
+              <button type="submit" className="magic-link-button">
+                {magicLinkSent ? 'Link Sent - Check Email' : 'Send Magic Link'}
+              </button>
+            </form>
+            {magicLinkSent && <p className="magic-link-success">Check your email for the login link!</p>}
+          </div>
+        )}
+
         <Link href="/create" className="home-link">
           » Forge a New Party «
         </Link>
+
         <p className="home-join-text">Or, Join an Existing Party:</p>
         <form onSubmit={handleJoinParty} className="home-form">
           <label htmlFor="partyCode" style={{ display: 'none' }}>
@@ -63,7 +121,7 @@ export default function Home() {
             type="text"
             id="partyCode"
             value={partyCode}
-            onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyCode(e.target.value.toUpperCase())}
             maxLength={6}
             className="home-input"
             placeholder="Enter Party Code"
@@ -71,8 +129,30 @@ export default function Home() {
           />
           <button type="submit" className="home-button">Join</button>
         </form>
-        <div className="home-footer-divider" />
-        <p className="home-footer-text">© 2025 Friend Party</p>
+
+        {user && ( // Only show "Your Parties" if user is logged in
+          <div className="home-parties">
+            <h2>Your Parties</h2>
+            {joinedParties.length > 0 ? (
+              <ul>
+                {joinedParties.map((party) => (
+                  <li key={party.code}>
+                    <Link href={`/party/${party.code}`}>
+                      {party.name} ({party.code})
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>You haven't joined any parties yet.</p>
+            )}
+          </div>
+        )}
+
+        <div className="home-footer">
+          <div className="home-footer-divider" />
+          <p className="home-footer-text">© 2025 Friend Party</p>
+        </div>
       </div>
     </>
   );
