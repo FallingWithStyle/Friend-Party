@@ -271,3 +271,77 @@ BEGIN
     ON CONFLICT (party_id, user_id) DO NOTHING;
   END IF;
 END $$;
+
+
+-- == 6. SEED ADDITIONAL MOCK DATA ==
+DO $$
+DECLARE
+  fellowship_party_id UUID;
+  patrick_user_id UUID := 'fcd61a1f-9393-414b-8048-65a2f3ca8095'; -- Re-using debug user for Patrick
+  gandalf_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+  frodo_user_id UUID   := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12';
+  samwise_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13';
+
+  patrick_member_id UUID;
+  gandalf_member_id UUID;
+  frodo_member_id UUID;
+  samwise_member_id UUID;
+
+  q_id UUID;
+  q_text TEXT;
+  answer_opts TEXT[];
+  member_ids UUID[];
+  member_id UUID;
+BEGIN
+  -- Create the 'Fellowship' party
+  INSERT INTO public.parties (code, name, motto)
+  VALUES ('FELLOW', 'The Fellowship', 'Not all those who wander are lost')
+  ON CONFLICT (code) DO NOTHING
+  RETURNING id INTO fellowship_party_id;
+
+  -- If the party was created, add members
+  IF fellowship_party_id IS NOT NULL THEN
+    -- Add mock users to auth.users. This is necessary for the foreign key constraint.
+    -- In a real app, users are created via the auth flow. Using placeholder passwords.
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES
+      (gandalf_user_id, 'gandalf@middleearth.com', crypt('password123', gen_salt('bf')), 'authenticated'),
+      (frodo_user_id, 'frodo@middleearth.com', crypt('password123', gen_salt('bf')), 'authenticated'),
+      (samwise_user_id, 'samwise@middleearth.com', crypt('password123', gen_salt('bf')), 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+    -- Add Patrick (as leader)
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader)
+    VALUES (fellowship_party_id, patrick_user_id, 'Patrick', true)
+    RETURNING id INTO patrick_member_id;
+
+    -- Add Gandalf
+    INSERT INTO public.party_members (party_id, user_id, first_name)
+    VALUES (fellowship_party_id, gandalf_user_id, 'Gandalf')
+    RETURNING id INTO gandalf_member_id;
+
+    -- Add Frodo
+    INSERT INTO public.party_members (party_id, user_id, first_name)
+    VALUES (fellowship_party_id, frodo_user_id, 'Frodo')
+    RETURNING id INTO frodo_member_id;
+
+    -- Add Samwise
+    INSERT INTO public.party_members (party_id, user_id, first_name)
+    VALUES (fellowship_party_id, samwise_user_id, 'Samwise')
+    RETURNING id INTO samwise_member_id;
+
+    -- Add self-assessment answers for all members
+    member_ids := ARRAY[patrick_member_id, gandalf_member_id, frodo_member_id, samwise_member_id];
+
+    FOR q_id, answer_opts IN
+      SELECT id, answer_options FROM public.questions WHERE question_type = 'self-assessment'
+    LOOP
+      FOREACH member_id IN ARRAY member_ids
+      LOOP
+        INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int]);
+      END LOOP;
+    END LOOP;
+
+  END IF;
+END $$;
