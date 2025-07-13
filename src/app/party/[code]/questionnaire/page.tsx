@@ -84,11 +84,24 @@ export default function QuestionnairePage() {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
-      // All questions answered, advance to the next stage (peer-assessment)
-      // For now, we'll just log it. This will be implemented in Story 2.3
-      console.log('Self-assessment complete!');
-      // In a real scenario, you'd likely update the user's status and redirect
-      // e.g., router.push(`/party/${code}/peer-assessment`);
+      // All questions answered, finish the questionnaire
+      try {
+        const response = await fetch(`/api/party/${code}/finish-questionnaire`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member_id: currentUserMember.id }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to finish questionnaire');
+        }
+
+        // Redirect to the results page
+        router.push(`/party/${code}/results`);
+      } catch (error) {
+        console.error('Error finishing questionnaire:', error);
+        // Optionally, show an error to the user
+      }
     }
   };
 

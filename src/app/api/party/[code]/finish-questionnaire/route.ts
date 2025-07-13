@@ -20,7 +20,7 @@ export async function POST(
 
     // First, get the party_id from the party code
     const { data: partyData, error: partyError } = await supabase
-      .from('party')
+      .from('parties')
       .select('id')
       .eq('code', partyCode)
       .single();
@@ -36,7 +36,7 @@ export async function POST(
 
     // Update the party_member status to 'Finished'
     const { error: updateError } = await supabase
-      .from('party_member')
+      .from('party_members')
       .update({ status: 'Finished' })
       .eq('id', member_id)
       .eq('party_id', partyId);
@@ -54,7 +54,7 @@ export async function POST(
 
     // Check if all members of the party have finished
     const { data: members, error: membersError } = await supabase
-      .from('party_member')
+      .from('party_members')
       .select('status')
       .eq('party_id', partyId);
 

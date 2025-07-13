@@ -22,18 +22,35 @@ export default function ResultsPage({ params }: { params: { code: string } }) {
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchPartyMembers = async () => {
+    const fetchResults = async () => {
       try {
-        const { data, error } = await supabase
+        // 1. Get party ID from code
+        const { data: partyData, error: partyError } = await supabase
+          .from('parties')
+          .select('id')
+          .eq('code', params.code)
+          .single();
+
+        if (partyError) throw partyError;
+        if (!partyData) throw new Error('Party not found.');
+
+        const partyId = partyData.id;
+
+        // 2. Get all members of the party
+        const { data: membersData, error: membersError } = await supabase
           .from('party_members')
           .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class')
-          .eq('party_code', params.code);
+          .eq('party_id', partyId);
 
-        if (error) {
-          throw error;
+        if (membersError) throw membersError;
+
+        // 3. Check if there are enough members to show results
+        if (membersData && membersData.length < 3) {
+          // Not enough members yet, you can set a specific state for this
+          setPartyMembers([]); // Or a specific message
+        } else {
+          setPartyMembers(membersData || []);
         }
-
-        setPartyMembers(data || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -41,7 +58,7 @@ export default function ResultsPage({ params }: { params: { code: string } }) {
       }
     };
 
-    fetchPartyMembers();
+    fetchResults();
   }, [params.code, supabase]);
 
   if (loading) {
@@ -50,6 +67,15 @@ export default function ResultsPage({ params }: { params: { code: string } }) {
 
   if (error) {
     return <div>Error: {error}</div>;
+  }
+
+  if (partyMembers.length < 3) {
+    return (
+      <div className="container mx-auto p-4 text-center">
+        <h1 className="text-2xl font-bold mb-4">Waiting for More Players</h1>
+        <p>The results will be calculated once more players have finished the questionnaire.</p>
+      </div>
+    );
   }
 
   return (

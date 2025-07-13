@@ -8,17 +8,37 @@ interface Party {
   motto: string;
 }
 
+interface PartyMember {
+  id: string;
+  user_id: string;
+  name: string;
+  status: 'Joined' | 'Voting' | 'Finished';
+}
+
+interface User {
+    id: string;
+    // add other user properties if needed
+}
+
 interface PartyState {
   party: Party | null;
+  members: PartyMember[];
+  user: User | null;
   loading: boolean;
   error: string | null;
   createParty: (partyData: Omit<Party, 'id' | 'code'>) => Promise<void>;
   getPartyByCode: (code: string) => Promise<void>;
   joinParty: (code: string, memberData: { firstName: string; lastName: string }) => Promise<void>;
+  setParty: (party: Party, members: PartyMember[]) => void;
+  addMember: (member: PartyMember) => void;
+  updateMemberStatus: (memberId: string, status: PartyMember['status']) => void;
+  setUser: (user: User) => void;
 }
 
 const usePartyStore = create<PartyState>((set) => ({
   party: null,
+  members: [],
+  user: null,
   loading: false,
   error: null,
   createParty: async (partyData) => {
@@ -83,6 +103,15 @@ const usePartyStore = create<PartyState>((set) => ({
       set({ loading: false, error: errorMessage });
     }
   },
+  setParty: (party, members) => set({ party, members, loading: false }),
+  addMember: (member) => set((state) => ({ members: [...state.members, member] })),
+  updateMemberStatus: (memberId, status) =>
+    set((state) => ({
+      members: state.members.map((m) =>
+        m.id === memberId ? { ...m, status } : m
+      ),
+    })),
+  setUser: (user) => set({ user }),
 }));
 
 export default usePartyStore;
