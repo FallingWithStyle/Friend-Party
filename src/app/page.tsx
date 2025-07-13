@@ -47,7 +47,12 @@ export default function Home() {
   const handleJoinParty = (e: React.FormEvent) => {
     e.preventDefault();
     if (partyCode.trim().length === 6) {
-      router.push(`/party/${partyCode}/join`);
+      const isMember = joinedParties.some(party => party.code === partyCode);
+      if (isMember) {
+        router.push(`/party/${partyCode}`); // Redirect to lobby if already a member
+      } else {
+        router.push(`/party/${partyCode}/join`); // Redirect to join page if not a member
+      }
     } else {
       alert('Please enter a valid 6-character party code.');
     }
@@ -134,15 +139,15 @@ export default function Home() {
           <div className="home-parties">
             <h2>Your Parties</h2>
             {joinedParties.length > 0 ? (
-              <ul>
+              <div className="party-list">
                 {joinedParties.map((party) => (
-                  <li key={party.code}>
+                  <div key={party.code} className="party-list-item">
                     <Link href={`/party/${party.code}`}>
                       {party.name} ({party.code})
                     </Link>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p>You haven't joined any parties yet.</p>
             )}

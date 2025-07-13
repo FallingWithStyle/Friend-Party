@@ -93,3 +93,24 @@
   font-size: 0.875rem;
   color: var(--muted);
 }
+
+.party-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* Spacing between party items */
+  margin-top: 1rem;
+}
+
+.party-list-item {
+  padding: 0.25rem 0;
+}
+
+.party-list-item a {
+  color: var(--primary); /* Link color */
+  text-decoration: none;
+  font-size: 1.125rem;
+}
+
+.party-list-item a:hover {
+  text-decoration: underline;
+}

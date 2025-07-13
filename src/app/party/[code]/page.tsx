@@ -3,9 +3,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '@/lib/supabase/client'; // Use the singleton client
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 import './page.css';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js'; // Keep for type casting if needed
 
 // --- Interfaces ---
 interface Member {
@@ -51,7 +52,8 @@ export default function PartyLobbyPage() {
   const { code } = useParams();
   const { party, loading, error, getPartyByCode } = usePartyStore();
   const router = useRouter();
-  const supabase = createClient() as unknown as SupabaseClient;
+  const supabase = createClient() as unknown as SupabaseClient; // Keep for direct Supabase calls
+  const { user, loading: userLoading } = useAuth(); // Get user and userLoading from useAuth
   // --- State ---
   const [members, setMembers] = useState<Member[]>([]);
   const [proposals, setProposals] = useState<NameProposal[]>([]);
@@ -67,14 +69,16 @@ export default function PartyLobbyPage() {
 
   useEffect(() => {
     const fetchUserMember = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && party) {
+      if (user && party) { // Only fetch if user and party are available
         const { data } = await supabase.from('party_members').select('*').eq('party_id', party.id).eq('user_id', user.id).single();
         setCurrentUserMember(data);
+      } else if (!user && !userLoading) {
+        // If no user and not loading, redirect to home (login)
+        router.push('/');
       }
     };
-    if (party) fetchUserMember();
-  }, [party, supabase]);
+    if (party && !userLoading) fetchUserMember(); // Fetch when party is loaded and user loading is complete
+  }, [party, user, userLoading, supabase, router]); // Add user, userLoading, router to dependencies
 
   useEffect(() => {
     if (!party) return;
@@ -201,9 +205,10 @@ export default function PartyLobbyPage() {
   }, [currentUserMember, party, code]);
 
   // --- Render Logic ---
-  if (loading) return <div className="text-center p-8">Loading Party...</div>;
+  if (loading || userLoading) return <div className="text-center p-8">Loading Party...</div>;
   if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
   if (!party) return <div className="text-center p-8">Party not found.</div>;
+  if (!user) return <div className="text-center p-8">Please log in to view this party.</div>; // Message if not logged in
 
   const getVotingStatusForMember = (memberId: string): VotingStatus => {
     const memberProposals = proposals.filter(p => p.target_member_id === memberId);

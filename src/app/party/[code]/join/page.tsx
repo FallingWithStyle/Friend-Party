@@ -3,56 +3,71 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '@/lib/supabase/client'; // Use the singleton client
 import Auth from '@/components/Auth';
-import { Session, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js'; // Keep for type casting if needed
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 import './page.css';
 
-const supabase = createClient() as unknown as SupabaseClient;
-
 export default function JoinPartyPage() {
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
   });
+  const [isMember, setIsMember] = useState(false); // New state to track membership
+  const [checkingMembership, setCheckingMembership] = useState(true); // New state for loading
   const router = useRouter();
   const { code } = useParams();
   const { loading, error, joinParty } = usePartyStore();
+  const supabase = createClient() as unknown as SupabaseClient; // Get supabase client
+  const { user, loading: userLoading } = useAuth(); // Get user and userLoading from useAuth
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+    const checkUserAndMembership = async () => {
+      setCheckingMembership(true);
+      if (userLoading) return; // Wait for user loading to complete
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+      if (!user) {
+        setCheckingMembership(false); // Not logged in, show Auth component
+        return;
+      }
 
-    return () => subscription.unsubscribe();
-  }, [session]);
+      // User is logged in, check if they are already a member of this party
+      if (typeof code === 'string') {
+        const { data: memberData, error: memberError } = await supabase
+          .from('party_members')
+          .select('id')
+          .eq('party_id', code) // Assuming party_id can be matched by code for simplicity or fetch party.id first
+          .eq('user_id', user.id)
+          .single();
 
-  useEffect(() => {
-    if (session) {
-      const fetchProfile = async () => {
-        const response = await fetch('/api/profile');
-        const data = await response.json();
-        setProfile(data);
-
-        // If profile has names, pre-fill the form
-        if (data && data.first_name && data.last_name) {
-          setFormData({
-            firstName: data.first_name,
-            lastName: data.last_name
-          });
+        if (memberData) {
+          setIsMember(true);
+          router.push(`/party/${code}`); // Redirect to lobby if already a member
+        } else if (memberError && memberError.code !== 'PGRST116') {
+          console.error('Error checking membership:', memberError);
+          // Handle error, maybe redirect to an error page or show a message
         }
-      };
-      fetchProfile();
-    }
-  }, [session]);
+      }
+
+      // Fetch profile if user is logged in and not already a member
+      const response = await fetch('/api/profile');
+      const data = await response.json();
+      setProfile(data);
+
+      // If profile has names, pre-fill the form
+      if (data && data.first_name && data.last_name) {
+        setFormData({
+          firstName: data.first_name,
+          lastName: data.last_name
+        });
+      }
+      setCheckingMembership(false);
+    };
+
+    checkUserAndMembership();
+  }, [user, userLoading, code, router, supabase]); // Dependencies
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -70,7 +85,11 @@ export default function JoinPartyPage() {
     }
   };
 
-  if (!session) {
+  if (userLoading || checkingMembership) {
+    return <div className="text-center p-8">Loading...</div>;
+  }
+
+  if (!user) {
     return (
       <div className="auth-required-container">
         <div className="auth-required-card">
@@ -81,11 +100,17 @@ export default function JoinPartyPage() {
     );
   }
 
+  if (isMember) {
+    // This case should ideally be handled by the redirect in useEffect,
+    // but as a fallback, if somehow we reach here and isMember is true
+    return <div className="text-center p-8">Redirecting to party lobby...</div>;
+  }
+
   return (
     <div className="join-party-container">
       <div className="join-party-card">
         <h1 className="join-party-title">Join the Party!</h1>
-        <p className="user-email-text">You are signed in as {session.user.email}.</p>
+        <p className="user-email-text">You are signed in as {user?.email}.</p>
         <form onSubmit={handleSubmit} className="join-party-form">
           {!profile?.first_name && (
             <div className="form-group">
