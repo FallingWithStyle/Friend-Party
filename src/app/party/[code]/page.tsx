@@ -187,15 +187,29 @@ export default function PartyLobbyPage() {
       if (!currentUserMember || !party) return;
 
       try {
-        const response = await fetch(`/api/party/${code}/assessment-status`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        // Check for self-assessment completion
+        const { data: selfAnswers, error: selfError } = await supabase
+          .from('answers')
+          .select('id')
+          .eq('voter_member_id', currentUserMember.id)
+          .eq('subject_member_id', currentUserMember.id);
 
-        if (response.ok) {
-          const data = await response.json();
-          setAssessmentsCompleted(data.selfCompleted && data.peerCompleted);
-        }
+        if (selfError) throw selfError;
+
+        // Check for peer-assessment completion
+        const { data: peerAnswers, error: peerError } = await supabase
+          .from('answers')
+          .select('id')
+          .eq('voter_member_id', currentUserMember.id)
+          .not('subject_member_id', 'eq', currentUserMember.id);
+
+        if (peerError) throw peerError;
+
+        const selfCompleted = selfAnswers && selfAnswers.length > 0;
+        const peerCompleted = peerAnswers && peerAnswers.length > 0;
+
+        setAssessmentsCompleted(selfCompleted && peerCompleted);
+
       } catch (error) {
         console.error('Error checking assessment status:', error);
       }
