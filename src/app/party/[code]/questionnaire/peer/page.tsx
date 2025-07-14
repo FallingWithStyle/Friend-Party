@@ -2,24 +2,30 @@
 
 import { PeerQuestionnaire } from '@/components/common/PeerQuestionnaire';
 import usePartyStore from '@/store/partyStore';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useEffect } from 'react';
 import './page.css';
 
-export default function PeerAssessmentPage({ params }: { params: { code: string } }) {
+export default function PeerAssessmentPage() {
   const router = useRouter();
-  const { members, party } = usePartyStore();
+  const params = useParams();
+  const code = params.code as string;
+  const { party } = usePartyStore();
 
   useEffect(() => {
-    if (!party?.code) {
-      router.push(`/party/${params.code}/join`);
+    if (!party?.code && code) {
+      router.push(`/party/${code}/join`);
     }
-  }, [party, params.code, router]);
+  }, [party, code, router]);
+
+  if (!code) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="peer-assessment-container">
       <h1 className="peer-assessment-title">Peer Assessment</h1>
-      <PeerQuestionnaire partyCode={params.code} />
+      <PeerQuestionnaire partyCode={code} />
     </div>
   );
 }
