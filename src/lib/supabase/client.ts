@@ -1,8 +1,25 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Declare a global variable to hold the client instance.
+// This is to ensure that the client is a singleton.
+declare global {
+  var supabase_client: SupabaseClient | undefined;
+}
 
-const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+let supabase_client: SupabaseClient | undefined = global.supabase_client;
 
-export const createClient = () => supabase;
+if (!supabase_client) {
+  supabase_client = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  global.supabase_client = supabase_client;
+}
+
+export const supabase = supabase_client;
+
+// This function is kept for compatibility but now it will return the singleton.
+export function createClient() {
+  return supabase;
+}

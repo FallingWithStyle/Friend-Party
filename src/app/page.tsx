@@ -27,11 +27,23 @@ export default function Home() {
     const fetchJoinedParties = async () => {
       if (user) { // Only fetch if user is logged in
         try {
-          const partiesResponse = await fetch('/api/user/parties');
-          if (partiesResponse.ok) {
-            const partiesData = await partiesResponse.json();
-            setJoinedParties(partiesData);
+          const { data: partyMembers, error } = await supabase
+            .from('party_members')
+            .select(`
+              party:parties (
+                code,
+                name
+              )
+            `)
+            .eq('user_id', user.id);
+
+          if (error) {
+            throw error;
           }
+
+          const parties = partyMembers?.map((pm: any) => pm.party).filter(Boolean) || [];
+          setJoinedParties(parties as Party[]);
+
         } catch (error) {
           console.error('Failed to fetch joined parties:', error);
         }

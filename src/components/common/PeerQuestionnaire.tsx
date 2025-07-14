@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import usePartyStore from '@/store/partyStore';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 import './PeerQuestionnaire.css';
 
@@ -41,7 +41,7 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
 
   useEffect(() => {
     const fetchQuestions = async () => {
-      const supabase = createClient() as unknown as SupabaseClient;
+      const supabase = createClient();
       const { data, error } = await supabase
         .from('questions')
         .select('id, question_text, question_type')
@@ -76,7 +76,7 @@ export const PeerQuestionnaire = ({ partyCode }: { partyCode: string }) => {
         answer_value: '1',
       }));
 
-      const supabase = createClient() as unknown as SupabaseClient;
+      const supabase = createClient();
       const { error } = await supabase.from('answers').insert(answersToSubmit);
 
       if (error) {
