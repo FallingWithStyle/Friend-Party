@@ -359,3 +359,88 @@ BEGIN
 
   END IF;
 END $$;
+
+-- == 7. ADD TEST PARTY WITH COMPLETED VOTING ==
+DO $$
+DECLARE
+  test_party_id UUID;
+  patrick_user_id UUID := 'fcd61a1f-9393-414b-8048-65a2f3ca8095'; -- Re-using debug user for Patrick
+  member1_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14';
+  member2_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15';
+  member3_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16';
+  member4_user_id UUID := 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17';
+
+  patrick_member_id UUID;
+  member1_id UUID;
+  member2_id UUID;
+  member3_id UUID;
+  member4_id UUID;
+
+  q_id UUID;
+  answer_opts TEXT[];
+  member_ids UUID[];
+  member_id UUID;
+BEGIN
+  -- Create the test party
+  INSERT INTO public.parties (code, name, motto, status)
+  VALUES ('DEBUG2', 'Test Party', 'Testing is fun!', 'Lobby')
+  ON CONFLICT (code) DO NOTHING
+  RETURNING id INTO test_party_id;
+
+  -- If the party was created, add members
+  IF test_party_id IS NOT NULL THEN
+    -- Add mock users to auth.users
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES
+      (member1_user_id, 'member1@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
+      (member2_user_id, 'member2@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
+      (member3_user_id, 'member3@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
+      (member4_user_id, 'member4@test.com', crypt('password123', gen_salt('bf')), 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+    -- Add Patrick (as leader)
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, adventurer_name)
+    VALUES (test_party_id, patrick_user_id, 'Patrick', true, 'Joined', 'Test Leader')
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO patrick_member_id;
+
+    -- Add Member 1
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
+    VALUES (test_party_id, member1_user_id, 'Finisher1', 'Finished', 'Finisher 1')
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member1_id;
+
+    -- Add Member 2
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
+    VALUES (test_party_id, member2_user_id, 'Finisher2', 'Finished', 'Finisher 2')
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member2_id;
+
+    -- Add Member 3
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
+    VALUES (test_party_id, member3_user_id, 'Finisher3', 'Finished', 'Finisher 3')
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member3_id;
+
+    -- Add Member 4
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
+    VALUES (test_party_id, member4_user_id, 'Finisher4', 'Finished', 'Finisher 4')
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member4_id;
+
+    -- Add self-assessment answers for all members
+    member_ids := ARRAY[patrick_member_id, member1_id, member2_id, member3_id, member4_id];
+
+    FOR q_id, answer_opts IN
+      SELECT id, answer_options FROM public.questions WHERE question_type = 'self-assessment'
+    LOOP
+      FOREACH member_id IN ARRAY member_ids
+      LOOP
+        INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int])
+        ON CONFLICT DO NOTHING;
+      END LOOP;
+    END LOOP;
+
+  END IF;
+END $$;

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 import usePartyStore from '@/store/partyStore';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import './page.css';
 
 type PartyMember = {
@@ -26,11 +27,19 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     const [loading, setLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState('Checking party status');
     const [error, setError] = useState<string | null>(null);
-    const supabase = createClient() as unknown as SupabaseClient;
+    const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+
+    useEffect(() => {
+        const initSupabase = async () => {
+            const client = await createClient();
+            setSupabase(client as unknown as SupabaseClient);
+        };
+        initSupabase();
+    }, []);
     const { setUserInfoFlowComplete } = usePartyStore();
 
-    const checkStatus = async (currentPartyId: string) => {
-        if (!currentPartyId) return;
+    const checkStatus = async (currentPartyId: string): Promise<boolean> => {
+        if (!currentPartyId || !supabase) return false;
 
         try {
             const { data: party, error: partyStatusError } = await supabase
@@ -42,8 +51,9 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             if (partyStatusError) throw partyStatusError;
 
             if (party?.status === 'ResultsReady') {
-                setLoadingMessage('All assessments are in. Calculating your party\'s results.');
+                setLoadingMessage('All assessments are in. Fetching your party\'s results.');
                 await fetchResults(currentPartyId);
+                return true; // Stop polling
             } else {
                 const { data: members, error: membersError } = await supabase
                     .from('party_members')
@@ -57,18 +67,20 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                     const names = waitingOn.map(m => m.first_name).join(', ');
                     setLoadingMessage(`Waiting for ${names} to finish the assessment.`);
                 } else {
-                    setLoadingMessage('All assessments are in. Calculating results.');
+                    setLoadingMessage('All assessments are in. Calculating results...');
                 }
-                // Keep loading true to show the message and button
                 setLoading(true);
+                return false; // Continue polling
             }
         } catch (err: any) {
             setError(err.message);
             setLoading(false);
+            return true; // Stop polling on error
         }
     };
 
     const fetchResults = async (currentPartyId: string) => {
+        if (!supabase) return;
         const { data: membersData, error: membersError } = await supabase
             .from('party_members')
             .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status')
@@ -80,6 +92,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     };
 
     useEffect(() => {
+        if (!supabase) return;
         setUserInfoFlowComplete(true);
         const getPartyId = async () => {
             try {
@@ -93,24 +106,35 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                 if (!partyData) throw new Error('Party not found.');
 
                 setPartyId(partyData.id);
-                await checkStatus(partyData.id);
+                setPartyId(partyData.id);
+
+                const statusCheck = setInterval(async () => {
+                    const isDone = await checkStatus(partyData.id);
+                    if (isDone) {
+                        clearInterval(statusCheck);
+                    }
+                }, 5000); // Check every 5 seconds
+
+                return () => clearInterval(statusCheck);
             } catch (err: any) {
                 setError(err.message);
                 setLoading(false);
             }
         };
 
-        getPartyId();
+        if (code && supabase) {
+            getPartyId();
+        }
     }, [code, supabase, setUserInfoFlowComplete]);
 
     if (loading) {
         return (
-            <div className="loading-message">
-                <p>{loadingMessage}</p>
-                <button onClick={() => partyId && checkStatus(partyId)} className="check-again-button">
-                    Check Again
-                </button>
-            </div>
+            <>
+                <LoadingSpinner />
+                <div className="loading-message">
+                    <p>{loadingMessage}</p>
+                </div>
+            </>
         );
     }
 

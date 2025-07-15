@@ -35,6 +35,11 @@ export default function HamburgerMenu() {
               Profile
             </Link>
           </li>
+          <li>
+            <Link href="/attributions" className="menu-link" onClick={closeMenu}>
+              Attributions
+            </Link>
+          </li>
         </ul>
       </nav>
     </div>

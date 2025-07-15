@@ -6,6 +6,7 @@ import { deterministicShuffle } from '@/lib/utils';
 import usePartyStore from '@/store/partyStore';
 import { createClient } from '@/lib/supabase/client';
 import { Question, PartyMember, AnswerOption } from '@/types/questionnaire';
+import LoadingSpinner from './LoadingSpinner';
 import './Questionnaire.css';
 
 interface UnifiedQuestionnaireProps {
@@ -20,6 +21,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDataReady, setIsDataReady] = useState(false);
   const [displayedMembers, setDisplayedMembers] = useState<PartyMember[]>([]);
   const [abilityScores, setAbilityScores] = useState({
@@ -72,79 +74,59 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     }
   }, [questionType, isDataReady]);
 
-  const handleAnswer = async (answer: string | AnswerOption) => {
+  const handleAnswer = (answer: string | AnswerOption) => {
     if (!currentUserMember || !questions[currentQuestionIndex]) return;
 
     const currentQuestion = questions[currentQuestionIndex];
-    let answerValue: string;
-    let subjectMemberId: string | null = null;
-
-    if (questionType === 'self-assessment') {
-      const option = answer as AnswerOption;
-      answerValue = option.stat;
-      subjectMemberId = currentUserMember.id;
-      setAbilityScores(prevScores => {
-        const newCounts = { ...prevScores };
-        newCounts[option.stat as keyof typeof newCounts] = (newCounts[option.stat as keyof typeof newCounts] || 0) + 1;
-        return newCounts;
-      });
-    } else {
-      answerValue = '1';
-      subjectMemberId = answer as string;
-    }
-    
     const newAnswers = {
       ...answers,
       [currentQuestion.id]: typeof answer === 'string' ? answer : (answer as AnswerOption).stat,
     };
     setAnswers(newAnswers);
 
-    if (questionType === 'peer-assessment') {
-        if (currentQuestionIndex === questions.length - 1) {
-            submitQuestionnaire(newAnswers);
-        } else {
-            setCurrentQuestionIndex(currentQuestionIndex + 1);
-        }
-    } else { // self-assessment
-        const supabase = createClient();
-        const { error } = await supabase.from('answers').insert({
-            question_id: currentQuestion.id,
-            voter_member_id: currentUserMember.id,
-            subject_member_id: subjectMemberId,
-            answer_value: answerValue,
-        });
+    if (questionType === 'self-assessment') {
+      const option = answer as AnswerOption;
+      setAbilityScores(prevScores => {
+        const newCounts = { ...prevScores };
+        newCounts[option.stat as keyof typeof newCounts] = (newCounts[option.stat as keyof typeof newCounts] || 0) + 1;
+        return newCounts;
+      });
+    }
 
-        if (error) {
-            console.error('Error saving answer:', error);
-            return;
-        }
-
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(currentQuestionIndex + 1);
-        } else {
-            submitQuestionnaire(newAnswers);
-        }
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      submitQuestionnaire(newAnswers);
     }
   };
 
   const submitQuestionnaire = async (finalAnswers: Record<string, string>) => {
     if (!currentUserMember) return;
+    setIsSubmitting(true);
 
-    if (questionType === 'peer-assessment') {
-        const answersToSubmit = Object.entries(finalAnswers).map(([questionId, subjectMemberId]) => ({
-            question_id: questionId,
-            voter_member_id: currentUserMember.id,
-            subject_member_id: subjectMemberId,
-            answer_value: '1',
-        }));
+    let answersToSubmit;
+    if (questionType === 'self-assessment') {
+      answersToSubmit = Object.entries(finalAnswers).map(([questionId, answerValue]) => ({
+        question_id: questionId,
+        voter_member_id: currentUserMember.id,
+        subject_member_id: currentUserMember.id,
+        answer_value: answerValue,
+      }));
+    } else { // peer-assessment
+      answersToSubmit = Object.entries(finalAnswers).map(([questionId, subjectMemberId]) => ({
+        question_id: questionId,
+        voter_member_id: currentUserMember.id,
+        subject_member_id: subjectMemberId,
+        answer_value: '1',
+      }));
+    }
 
-        const supabase = createClient();
-        const { error } = await supabase.from('answers').insert(answersToSubmit);
+    const supabase = createClient();
+    const { error } = await supabase.from('answers').insert(answersToSubmit);
 
-        if (error) {
-            console.error('Error submitting answers:', error);
-            return;
-        }
+    if (error) {
+      console.error('Error submitting answers:', error);
+      return;
     }
 
     const response = await fetch(`/api/party/${partyCode}/finish-questionnaire`, {
@@ -163,6 +145,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     } else {
         router.push(`/party/${partyCode}/results`);
     }
+    setIsSubmitting(false);
   };
 
   if (isLoading || !isDataReady) {
@@ -176,48 +159,51 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="questionnaire-card">
-      <div className="question-header">
-        <h2 className="question-title">
-          Question {currentQuestionIndex + 1} of {questions.length}
-        </h2>
-        <p className="question-text">{currentQuestion.question_text}</p>
-      </div>
-      <div className="answers-container">
-        {questionType === 'self-assessment' && currentQuestion.answer_options ? (
-          currentQuestion.answer_options.map((option, index) => (
-            <button
-              key={index}
-              className={`answer-button ${answers[currentQuestion.id] === option.stat ? 'selected' : ''}`}
-              onClick={() => handleAnswer(option)}
-            >
-              {option.text}
-            </button>
-          ))
-        ) : (
-          displayedMembers.map((member) => (
-            <button
-              key={member.id}
-              className={`answer-button ${answers[currentQuestion.id] === member.id ? 'selected' : ''}`}
-              onClick={() => handleAnswer(member.id)}
-            >
-              {member.first_name}
-            </button>
-          ))
+    <>
+      {isSubmitting && <LoadingSpinner />}
+      <div className="questionnaire-card">
+        <div className="question-header">
+          <h2 className="question-title">
+            Question {currentQuestionIndex + 1} of {questions.length}
+          </h2>
+          <p className="question-text">{currentQuestion.question_text}</p>
+        </div>
+        <div className="answers-container">
+          {questionType === 'self-assessment' && currentQuestion.answer_options ? (
+            currentQuestion.answer_options.map((option, index) => (
+              <button
+                key={index}
+                className={`answer-button ${answers[currentQuestion.id] === option.stat ? 'selected' : ''}`}
+                onClick={() => handleAnswer(option)}
+              >
+                {option.text}
+              </button>
+            ))
+          ) : (
+            displayedMembers.map((member) => (
+              <button
+                key={member.id}
+                className={`answer-button ${answers[currentQuestion.id] === member.id ? 'selected' : ''}`}
+                onClick={() => handleAnswer(member.id)}
+              >
+                {member.first_name}
+              </button>
+            ))
+          )}
+        </div>
+        {questionType === 'self-assessment' && (
+          <div className="scores-container">
+            <h3 className="scores-title">Current Ability Scores</h3>
+            <div className="scores-grid">
+              {Object.entries(abilityScores).map(([stat, value]) => (
+                <div key={stat} className="score-item">
+                  <span className="score-stat">{stat}:</span> {value}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
-      {questionType === 'self-assessment' && (
-        <div className="scores-container">
-          <h3 className="scores-title">Current Ability Scores</h3>
-          <div className="scores-grid">
-            {Object.entries(abilityScores).map(([stat, value]) => (
-              <div key={stat} className="score-item">
-                <span className="score-stat">{stat}:</span> {value}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
