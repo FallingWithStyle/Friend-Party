@@ -35,10 +35,23 @@ export default function JoinPartyPage() {
 
       // User is logged in, check if they are already a member of this party
       if (typeof code === 'string') {
+        // First, get the party ID from the party code
+        const { data: partyData, error: partyError } = await supabase
+          .from('parties')
+          .select('id')
+          .eq('code', code)
+          .single();
+
+        if (partyError || !partyData) {
+          console.error('Error fetching party or party not found:', partyError);
+          router.push('/'); // Redirect if party not found
+          return;
+        }
+
         const { data: memberData, error: memberError } = await supabase
           .from('party_members')
           .select('id')
-          .eq('party_id', code) // Assuming party_id can be matched by code for simplicity or fetch party.id first
+          .eq('party_id', partyData.id)
           .eq('user_id', user.id)
           .single();
 

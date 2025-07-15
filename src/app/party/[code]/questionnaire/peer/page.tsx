@@ -1,6 +1,6 @@
 'use client';
 
-import { PeerQuestionnaire } from '@/components/common/PeerQuestionnaire';
+import { UnifiedQuestionnaire } from '@/components/common/UnifiedQuestionnaire';
 import usePartyStore from '@/store/partyStore';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect } from 'react';
@@ -10,13 +10,13 @@ export default function PeerAssessmentPage() {
   const router = useRouter();
   const params = useParams();
   const code = params.code as string;
-  const { party } = usePartyStore();
+  const { party, getPartyByCode } = usePartyStore();
 
   useEffect(() => {
     if (!party?.code && code) {
-      router.push(`/party/${code}/join`);
+      getPartyByCode(code);
     }
-  }, [party, code, router]);
+  }, [party, code, getPartyByCode]);
 
   if (!code) {
     return <div>Loading...</div>;
@@ -25,7 +25,7 @@ export default function PeerAssessmentPage() {
   return (
     <div className="peer-assessment-container">
       <h1 className="peer-assessment-title">Peer Assessment</h1>
-      <PeerQuestionnaire partyCode={code} />
+      <UnifiedQuestionnaire partyCode={code} questionType="peer-assessment" />
     </div>
   );
 }

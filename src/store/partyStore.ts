@@ -14,11 +14,12 @@ interface PartyMember {
   first_name: string;
   last_name: string | null;
   status: 'Joined' | 'Voting' | 'Finished';
+  email?: string; // Add optional email property
 }
 
 interface User {
     id: string;
-    // add other user properties if needed
+    email?: string; // Add email property
 }
 
 interface PartyState {
@@ -67,19 +68,29 @@ const usePartyStore = create<PartyState>((set) => ({
     const supabase = createClient();
     set({ loading: true, error: null });
     try {
-      const { data: party, error } = await supabase
+      const { data: party, error: partyError } = await supabase
         .from('parties')
         .select('*')
         .eq('code', code)
         .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
+      if (partyError) {
+        if (partyError.code === 'PGRST116') {
           throw new Error('Party not found');
         }
-        throw error;
+        throw partyError;
       }
-      set({ party, loading: false });
+
+      const { data: members, error: membersError } = await supabase
+        .from('party_members')
+        .select('*')
+        .eq('party_id', party.id);
+
+      if (membersError) {
+        throw membersError;
+      }
+
+      set({ party, members: members || [], loading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ loading: false, error: errorMessage });
