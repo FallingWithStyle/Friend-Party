@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'; // Use the singleton clien
 import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 import './page.css';
 import { SupabaseClient } from '@supabase/supabase-js'; // Keep for type casting if needed
+import { UserInfoHandler } from '@/components/common/UserInfoHandler';
 
 // --- Interfaces ---
 interface Member {
@@ -245,6 +246,7 @@ export default function PartyLobbyPage() {
       <div className="party-lobby-card">
         <h1 className="party-lobby-title">{party.name}</h1>
         <p className="party-code">Party Code: <span className="party-code-span">{party.code}</span></p>
+        <UserInfoHandler />
         
         {currentUserMember && (
           <div className="navigation-container">

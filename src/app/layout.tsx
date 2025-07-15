@@ -9,7 +9,6 @@ export const metadata: Metadata = {
 
 import Link from 'next/link';
 import HamburgerMenu from '@/components/HamburgerMenu'; // Import the new component
-import { UserInfoHandler } from '@/components/common/UserInfoHandler'; // Import UserInfoHandler
 
 export default function RootLayout({
   children,
@@ -19,7 +18,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="layout-body">
-        <UserInfoHandler /> {/* Add UserInfoHandler to the root layout */}
         <HamburgerMenu /> {/* Integrate the HamburgerMenu component */}
         <div className="layout-container">
           <div className="layout-content">

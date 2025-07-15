@@ -43,7 +43,7 @@ const usePartyStore = create<PartyState>((set) => ({
   party: null,
   members: [],
   user: null,
-  loading: false,
+  loading: true,
   error: null,
   isUserInfoFlowComplete: false,
   createParty: async (partyData) => {

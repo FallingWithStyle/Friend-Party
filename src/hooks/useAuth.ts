@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client'; // Corrected import path
 import { Session, User, SupabaseClient } from '@supabase/supabase-js';
 import { useRef } from 'react'; // Import useRef
+import usePartyStore from '@/store/partyStore';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,6 +27,7 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user || null);
       setLoading(false);
+      usePartyStore.setState({ loading: false });
     };
 
     getSession();

@@ -3,101 +3,62 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import usePartyStore from '@/store/partyStore';
+import { useAuth } from '@/hooks/useAuth';
 
 export const UserInfoHandler = () => {
   const [mounted, setMounted] = useState(false);
-  const { members, user, setUser, isUserInfoFlowComplete } = usePartyStore();
-  const [emailVerified, setEmailVerified] = useState(false);
-  const [email, setEmail] = useState('');
+  const { members, isUserInfoFlowComplete, loading: partyLoading } = usePartyStore();
+  const { user, loading: authLoading } = useAuth();
   const [nameVerified, setNameVerified] = useState(false);
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const currentMember = members.find((member: any) => member.user_id === user?.id);
 
   useEffect(() => {
     setMounted(true);
-    const supabase = createClient();
-    const fetchUser = async () => {
-      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-      if (supabaseUser) {
-        setUser({ id: supabaseUser.id, email: supabaseUser.email || undefined });
-      }
-    };
-    fetchUser();
-
-    if (currentMember) {
-      if (currentMember.email) {
-        setEmail(currentMember.email);
-        setEmailVerified(true);
-      }
-      if (currentMember.first_name) {
-        setName(currentMember.first_name);
-        setNameVerified(true);
-      }
-    } else if (user?.email) {
-      setEmail(user.email);
-      setEmailVerified(true);
+    if (currentMember?.first_name) {
+      setNameVerified(true);
     }
-  }, [currentMember, user, setUser, members]);
+  }, [currentMember]);
 
-  if (!mounted) {
+  if (!mounted || partyLoading || authLoading || isUserInfoFlowComplete || nameVerified) {
     return null;
   }
 
-  if (isUserInfoFlowComplete) {
-    return null;
-  }
-
-  if (!emailVerified && !currentMember?.email) {
-    return (
-      <div className="email-verification">
-        <h2>Verify Your Email</h2>
-        <p>Please confirm your email address for this party</p>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
-        />
-        <button
-          onClick={() => setEmailVerified(true)}
-          disabled={!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
-        >
-          Next
-        </button>
-      </div>
-    );
-  }
-
-  if (!nameVerified) {
-    return (
-      <div className="name-verification">
-        <h2>Enter Your Name</h2>
-        <p>Please enter your name for this party</p>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter your name"
-        />
-        <button
-          onClick={() => {
-            setNameVerified(true);
-            const updateMemberName = async () => {
-              const supabase = createClient();
-              await supabase
-                .from('party_members')
-                .update({ first_name: name })
-                .eq('id', currentMember?.id);
-            };
-            updateMemberName();
-          }}
-          disabled={!name || name.trim().length === 0}
-        >
-          Confirm Name
-        </button>
-      </div>
-    );
-  }
+  return (
+    <div className="name-verification">
+      <h2>Enter Your Name</h2>
+      <p>Please enter your name for this party</p>
+      <input
+        type="text"
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+        placeholder="First Name"
+      />
+      <input
+        type="text"
+        value={lastName}
+        onChange={(e) => setLastName(e.target.value)}
+        placeholder="Last Name"
+      />
+      <button
+        onClick={() => {
+          setNameVerified(true);
+          const updateMemberName = async () => {
+            const supabase = createClient();
+            await supabase
+              .from('party_members')
+              .update({ first_name: firstName, last_name: lastName })
+              .eq('id', currentMember?.id);
+          };
+          updateMemberName();
+        }}
+        disabled={!firstName || firstName.trim().length === 0}
+      >
+        Confirm Name
+      </button>
+    </div>
+  );
 
   return null;
 };
