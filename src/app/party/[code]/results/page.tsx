@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
+import usePartyStore from '@/store/partyStore';
 import './page.css';
 
 type PartyMember = {
@@ -15,85 +16,103 @@ type PartyMember = {
   wisdom: number;
   constitution: number;
   class: string;
+  status: 'Joined' | 'Voting' | 'Finished';
 };
 
 export default function ResultsPage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params);
-  const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = createClient() as unknown as SupabaseClient;
+    const { code } = use(params);
+    const [partyId, setPartyId] = useState<string | null>(null);
+    const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [loadingMessage, setLoadingMessage] = useState('Checking party status');
+    const [error, setError] = useState<string | null>(null);
+    const supabase = createClient() as unknown as SupabaseClient;
+    const { setUserInfoFlowComplete } = usePartyStore();
 
-  useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const { data: partyData, error: partyError } = await supabase
-          .from('parties')
-          .select('id')
-          .eq('code', code)
-          .single();
+    const checkStatus = async (currentPartyId: string) => {
+        if (!currentPartyId) return;
 
-        if (partyError) throw partyError;
-        if (!partyData) throw new Error('Party not found.');
+        try {
+            const { data: party, error: partyStatusError } = await supabase
+                .from('parties')
+                .select('status')
+                .eq('id', currentPartyId)
+                .single();
 
-        const partyId = partyData.id;
+            if (partyStatusError) throw partyStatusError;
 
+            if (party?.status === 'ResultsReady') {
+                setLoadingMessage('All assessments are in. Calculating your party\'s results.');
+                await fetchResults(currentPartyId);
+            } else {
+                const { data: members, error: membersError } = await supabase
+                    .from('party_members')
+                    .select('first_name, status')
+                    .eq('party_id', currentPartyId);
+
+                if (membersError) throw membersError;
+
+                const waitingOn = members.filter(m => m.status !== 'Finished');
+                if (waitingOn.length > 0) {
+                    const names = waitingOn.map(m => m.first_name).join(', ');
+                    setLoadingMessage(`Waiting for ${names} to finish the assessment.`);
+                } else {
+                    setLoadingMessage('All assessments are in. Calculating results.');
+                }
+                // Keep loading true to show the message and button
+                setLoading(true);
+            }
+        } catch (err: any) {
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    const fetchResults = async (currentPartyId: string) => {
         const { data: membersData, error: membersError } = await supabase
-          .from('party_members')
-          .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class')
-          .eq('party_id', partyId);
+            .from('party_members')
+            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status')
+            .eq('party_id', currentPartyId);
 
         if (membersError) throw membersError;
         setPartyMembers(membersData || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
         setLoading(false);
-      }
     };
 
-    const pollForResults = async () => {
-      let attempts = 0;
-      const maxAttempts = 10;
-      const interval = 3000; // 3 seconds
+    useEffect(() => {
+        setUserInfoFlowComplete(true);
+        const getPartyId = async () => {
+            try {
+                const { data: partyData, error: partyError } = await supabase
+                    .from('parties')
+                    .select('id')
+                    .eq('code', code)
+                    .single();
 
-      const poll = async (resolve: (value: unknown) => void, reject: (reason?: any) => void) => {
-        if (attempts >= maxAttempts) {
-          return reject(new Error('Timeout waiting for results.'));
-        }
+                if (partyError) throw partyError;
+                if (!partyData) throw new Error('Party not found.');
 
-        const { data: party, error } = await supabase
-          .from('parties')
-          .select('status')
-          .eq('code', code)
-          .single();
+                setPartyId(partyData.id);
+                await checkStatus(partyData.id);
+            } catch (err: any) {
+                setError(err.message);
+                setLoading(false);
+            }
+        };
 
-        if (error) return reject(error);
+        getPartyId();
+    }, [code, supabase, setUserInfoFlowComplete]);
 
-        if (party?.status === 'ResultsReady') {
-          return resolve(true);
-        } else {
-          attempts++;
-          setTimeout(() => poll(resolve, reject), interval);
-        }
-      };
-
-      return new Promise(poll);
-    };
-
-    pollForResults()
-      .then(() => {
-        fetchResults();
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [code, supabase]);
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+    if (loading) {
+        return (
+            <div className="loading-message">
+                <p>{loadingMessage}</p>
+                <button onClick={() => partyId && checkStatus(partyId)} className="check-again-button">
+                    Check Again
+                </button>
+            </div>
+        );
+    }
 
   if (error) {
     return <div>Error: {error}</div>;

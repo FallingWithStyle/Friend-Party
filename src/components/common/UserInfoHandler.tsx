@@ -6,7 +6,7 @@ import usePartyStore from '@/store/partyStore';
 
 export const UserInfoHandler = () => {
   const [mounted, setMounted] = useState(false);
-  const { members, user, setUser } = usePartyStore();
+  const { members, user, setUser, isUserInfoFlowComplete } = usePartyStore();
   const [emailVerified, setEmailVerified] = useState(false);
   const [email, setEmail] = useState('');
   const [nameVerified, setNameVerified] = useState(false);
@@ -40,6 +40,10 @@ export const UserInfoHandler = () => {
   }, [currentMember, user, setUser, members]);
 
   if (!mounted) {
+    return null;
+  }
+
+  if (isUserInfoFlowComplete) {
     return null;
   }
 

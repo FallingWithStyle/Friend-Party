@@ -35,6 +35,8 @@ interface PartyState {
   addMember: (member: PartyMember) => void;
   updateMemberStatus: (memberId: string, status: PartyMember['status']) => void;
   setUser: (user: User) => void;
+  isUserInfoFlowComplete: boolean;
+  setUserInfoFlowComplete: (isComplete: boolean) => void;
 }
 
 const usePartyStore = create<PartyState>((set) => ({
@@ -43,6 +45,7 @@ const usePartyStore = create<PartyState>((set) => ({
   user: null,
   loading: false,
   error: null,
+  isUserInfoFlowComplete: false,
   createParty: async (partyData) => {
     const supabase = createClient();
     set({ loading: true, error: null });
@@ -124,6 +127,7 @@ const usePartyStore = create<PartyState>((set) => ({
       ),
     })),
   setUser: (user) => set({ user }),
+  setUserInfoFlowComplete: (isComplete) => set({ isUserInfoFlowComplete: isComplete }),
 }));
 
 export default usePartyStore;

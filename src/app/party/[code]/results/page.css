@@ -56,3 +56,31 @@
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+.loading-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+  font-size: 1.25rem;
+  color: var(--foreground);
+  text-align: center;
+  padding: 2rem;
+  flex-direction: column;
+}
+
+.check-again-button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.check-again-button:hover {
+  background-color: #B50000; /* A more distinct, lighter red for hover */
+}
