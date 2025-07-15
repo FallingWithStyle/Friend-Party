@@ -43,9 +43,15 @@ export async function POST(
     // If all members are finished, invoke the calculation function
     if (unfinishedCount === 0) {
       // Don't await this, let it run in the background
-      supabase.functions.invoke('calculate-results', {
+      const { error: invokeError } = await supabase.functions.invoke('calculate-results', {
         body: { party_id: partyData.id },
       });
+
+      if (invokeError) {
+        // Log the error for debugging and throw it to be caught by the catch block
+        console.error('Error invoking calculate-results function:', invokeError);
+        throw invokeError;
+      }
     }
 
     return NextResponse.json({ success: true });

@@ -84,3 +84,42 @@
 .check-again-button:hover {
   background-color: #B50000; /* A more distinct, lighter red for hover */
 }
+
+.progress-indicator {
+  text-align: center;
+  color: var(--foreground);
+}
+
+.progress-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+}
+
+.progress-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.progress-step {
+  font-size: 1.125rem;
+  padding: 0.5rem 0;
+  opacity: 0.5;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.progress-step.completed {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.progress-step.completed::before {
+  content: '✓ ';
+  color: var(--primary);
+}
+
+.clickable-when-loading {
+  z-index: 10000;
+  position: relative; /* z-index only works on positioned elements */
+}
