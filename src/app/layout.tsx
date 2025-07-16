@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 
 import Link from 'next/link';
 import HamburgerMenu from '@/components/HamburgerMenu'; // Import the new component
+import { DebugToolbar } from '@/components/DebugToolbar'; // Import DebugToolbar
 
 export default function RootLayout({
   children,
@@ -24,6 +25,7 @@ export default function RootLayout({
             {children}
           </div>
         </div>
+        <DebugToolbar /> {/* Add DebugToolbar here */}
       </body>
     </html>
   );

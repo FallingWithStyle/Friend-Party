@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+console.log('Rendering questionnaire page');
 import { UnifiedQuestionnaire } from '@/components/common/UnifiedQuestionnaire';
 import usePartyStore from '@/store/partyStore';
 import { useRouter } from 'next/navigation';

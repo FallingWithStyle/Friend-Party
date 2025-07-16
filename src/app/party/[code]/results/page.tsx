@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 import usePartyStore from '@/store/partyStore';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { logDebug } from '@/lib/debug';
 import './page.css';
 
 type PartyMember = {
@@ -26,6 +27,8 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     const [partyId, setPartyId] = useState<string | null>(null);
     const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
     const [loading, setLoading] = useState(true);
+    const [waitingOn, setWaitingOn] = useState<any[]>([]);
+    const [isCalculating, setIsCalculating] = useState(false);
     const progressSteps = [
         'Checking party status',
         'Waiting for party members',
@@ -57,7 +60,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
             if (partyStatusError) throw partyStatusError;
 
-            if (party?.status === 'ResultsReady') {
+            if (party?.status === 'Results') {
                 setCurrentStep(3); // Fetching results
                 await fetchResults(currentPartyId);
                 return true; // Stop polling
@@ -65,20 +68,28 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                 setCurrentStep(1); // Waiting for party members
                 const { data: members, error: membersError } = await supabase
                     .from('party_members')
-                    .select('first_name, status')
+                    .select('first_name, assessment_status')
                     .eq('party_id', currentPartyId);
 
                 if (membersError) throw membersError;
 
-                const waitingOn = members.filter(m => m.status !== 'Finished');
-                if (waitingOn.length > 0) {
+                const unfinishedMembers = members.filter(m => m.assessment_status !== 'PeerAssessmentCompleted');
+                logDebug('Unfinished members:', unfinishedMembers);
+                setWaitingOn(unfinishedMembers);
+
+                if (unfinishedMembers.length > 0) {
                     // Still waiting, no message change needed as the step indicates this.
                     return false; // Continue polling
                 } else {
                     // All members are finished, but results are not ready. Trigger calculation.
-                    setCurrentStep(2); // Calculating results
-                    await handleCheckResults(); // This will trigger the API call
-                    return false; // Continue polling, the next check should find the results
+                    if (!isCalculating) {
+                        const { user } = usePartyStore.getState();
+                        if (user) {
+                            setCurrentStep(2); // Calculating results
+                            await handleCheckResults(); // This will trigger the API call
+                        }
+                    }
+                    return false; // Continue polling, let the interval handle it
                 }
             }
         } catch (err: any) {
@@ -97,6 +108,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
         if (membersError) throw membersError;
         setPartyMembers(membersData || []);
+        logDebug('Final results displayed:', membersData);
         setLoading(false);
     };
 
@@ -144,18 +156,28 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         }
     }, [code, supabase, setUserInfoFlowComplete, getPartyByCode]);
 
+    useEffect(() => {
+        console.log('waitingOn changed:', waitingOn);
+    }, [waitingOn]);
+
     const handleCheckResults = async () => {
-        console.log("handleCheckResults called");
-        if (!partyId || !supabase) {
-            console.error("handleCheckResults: partyId or supabase is not set.", { partyId, supabase });
+        if (isCalculating) return;
+        setIsCalculating(true);
+
+        const { party } = usePartyStore.getState();
+        if (!party || !supabase) {
+            console.error("handleCheckResults: partyId or supabase is not set.", { party, supabase });
+            setIsCalculating(false);
             return;
         }
+        const partyId = party.id;
 
         console.log("Getting user and members from store...");
         const { user, members } = usePartyStore.getState();
         if (!user) {
             console.error("handleCheckResults: User not found in store.");
             setError("User not found. Please ensure you are logged in.");
+            setIsCalculating(false);
             return;
         }
         console.log("User found:", user);
@@ -164,6 +186,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         if (!currentMember) {
             console.error("handleCheckResults: Could not find current member in party.", { members });
             setError("Could not identify the current user within this party.");
+            setIsCalculating(false);
             return;
         }
         const memberId = currentMember.id;
@@ -179,7 +202,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ member_id: memberId }),
+                body: JSON.stringify({ member_id: memberId, assessment_type: 'peer-assessment' }),
             });
             console.log("Fetch response received:", response);
 
@@ -190,13 +213,14 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             }
 
             console.log("API call successful, checking status...");
-            await checkStatus(partyId);
+            // await checkStatus(partyId); // Removed to prevent loop
 
 
         } catch (err: any) {
             console.error("Error in handleCheckResults:", err);
             setError(err.message);
             setLoading(false);
+            setIsCalculating(false);
         }
     };
 
@@ -213,6 +237,18 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                             </li>
                         ))}
                     </ul>
+                    {waitingOn.length > 0 && (
+                        <div className="waiting-on-list">
+                            <h3>Waiting for:</h3>
+                            <ul>
+                                {waitingOn.map((member, index) => (
+                                    <li key={index}>
+                                        {member.first_name} - {member.assessment_status}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
             </div>
         );

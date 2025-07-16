@@ -13,7 +13,8 @@ interface PartyMember {
   user_id: string;
   first_name: string;
   last_name: string | null;
-  status: 'Joined' | 'Voting' | 'Finished';
+  status: 'Lobby' | 'Self Assessment' | 'Peer Assessment' | 'Results';
+  is_leader: boolean;
   email?: string; // Add optional email property
 }
 
@@ -37,6 +38,7 @@ interface PartyState {
   setUser: (user: User) => void;
   isUserInfoFlowComplete: boolean;
   setUserInfoFlowComplete: (isComplete: boolean) => void;
+  resetPartyState: () => void; // Add reset function
 }
 
 const usePartyStore = create<PartyState>((set) => ({
@@ -128,6 +130,7 @@ const usePartyStore = create<PartyState>((set) => ({
     })),
   setUser: (user) => set({ user }),
   setUserInfoFlowComplete: (isComplete) => set({ isUserInfoFlowComplete: isComplete }),
+  resetPartyState: () => set({ party: null, members: [], error: null }), // Implement reset function
 }));
 
 export default usePartyStore;

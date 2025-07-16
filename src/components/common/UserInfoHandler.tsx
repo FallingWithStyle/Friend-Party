@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 export const UserInfoHandler = () => {
   const [mounted, setMounted] = useState(false);
-  const { members, isUserInfoFlowComplete, loading: partyLoading } = usePartyStore();
+  const { members, isUserInfoFlowComplete, loading: partyLoading, setUser } = usePartyStore();
   const { user, loading: authLoading } = useAuth();
   const [nameVerified, setNameVerified] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -20,6 +20,12 @@ export const UserInfoHandler = () => {
       setNameVerified(true);
     }
   }, [currentMember]);
+
+  useEffect(() => {
+    if (user) {
+      setUser({ id: user.id, email: user.email });
+    }
+  }, [user, setUser]);
 
   if (!mounted || partyLoading || authLoading || isUserInfoFlowComplete || nameVerified) {
     return null;

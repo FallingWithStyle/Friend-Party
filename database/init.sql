@@ -6,6 +6,8 @@
 -- Note: Dropping is done in reverse order of creation to respect dependencies.
 
 -- Drop Policies
+DROP POLICY IF EXISTS "Allow members to see their own assessment assignments" ON public.peer_assessment_assignments;
+DROP POLICY IF EXISTS "Allow members to insert their own assessment assignments" ON public.peer_assessment_assignments;
 DROP POLICY IF EXISTS "Allow members to insert their own answers" ON public.answers;
 DROP POLICY IF EXISTS "Allow members to see answers in their party" ON public.answers;
 DROP POLICY IF EXISTS "Allow all users to read questions" ON public.questions;
@@ -16,6 +18,7 @@ DROP POLICY IF EXISTS "Allow members to see votes in their party" ON public.name
 DROP POLICY IF EXISTS "Allow members to insert proposals in their party" ON public.name_proposals;
 DROP POLICY IF EXISTS "Allow members to see proposals in their party" ON public.name_proposals;
 DROP POLICY IF EXISTS "Allow user to update their own adventurer name" ON public.party_members;
+DROP POLICY IF EXISTS "Allow user to update their own assessment status" ON public.party_members;
 DROP POLICY IF EXISTS "Allow users to see members of their own parties" ON public.party_members;
 DROP POLICY IF EXISTS "Allow users to be added to parties" ON public.party_members;
 DROP POLICY IF EXISTS "Allow public read for parties" ON public.parties;
@@ -28,27 +31,28 @@ DROP POLICY IF EXISTS "Allow authenticated users to update their own profile" ON
 -- Drop Functions
 DROP FUNCTION IF EXISTS public.is_party_member(uuid, uuid);
 DROP FUNCTION IF EXISTS public.create_party_with_leader(text, text, text, text, uuid);
+DROP FUNCTION IF EXISTS public.generate_peer_assessment_distribution(uuid);
 
 -- Drop Tables
-DROP TABLE IF EXISTS public.stats CASCADE;
 DROP TABLE IF EXISTS public.answers CASCADE;
 DROP TABLE IF EXISTS public.name_proposal_votes CASCADE;
 DROP TABLE IF EXISTS public.party_motto_proposals CASCADE;
 DROP TABLE IF EXISTS public.name_proposals CASCADE;
-DROP TABLE IF EXISTS public.questions CASCADE;
+DROP TABLE IF EXISTS public.peer_assessment_assignments CASCADE;
 DROP TABLE IF EXISTS public.party_members CASCADE;
 DROP TABLE IF EXISTS public.parties CASCADE;
+DROP TABLE IF EXISTS public.questions CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.stats CASCADE;
 
 
 -- == 2. CREATE TABLES ==
--- Create all tables in the correct order to satisfy foreign key constraints.
-
 CREATE TABLE IF NOT EXISTS public.stats (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL
 );
+COMMENT ON TABLE public.stats IS 'Stores the core D&D-style stats.';
 
--- Create the profiles table to store user profile information
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -58,16 +62,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 COMMENT ON TABLE public.profiles IS 'Stores user profile information including names.';
-COMMENT ON TABLE public.stats IS 'Stores the core D&D-style stats.';
-
-INSERT INTO public.stats (id, name) VALUES
-('STR', 'Strength'),
-('DEX', 'Dexterity'),
-('CON', 'Constitution'),
-('INT', 'Intelligence'),
-('WIS', 'Wisdom'),
-('CHA', 'Charisma')
-ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.parties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -78,7 +72,7 @@ CREATE TABLE IF NOT EXISTS public.parties (
   status TEXT DEFAULT 'Lobby' NOT NULL
 );
 COMMENT ON TABLE public.parties IS 'Stores information about each party created.';
-COMMENT ON COLUMN public.parties.status IS 'The current phase of the party (Lobby, Voting, ResultsReady).';
+COMMENT ON COLUMN public.parties.status IS 'The current phase of the party (Lobby, Self Assessment, Peer Assessment, Results).';
 
 CREATE TABLE IF NOT EXISTS public.party_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -99,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.party_members (
   charisma INTEGER,
   character_class TEXT,
   class TEXT,
+  assessment_status TEXT DEFAULT 'NotStarted' NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT unique_party_user UNIQUE (party_id, user_id)
 );
@@ -161,9 +156,21 @@ CREATE TABLE IF NOT EXISTS public.party_motto_proposals (
 );
 COMMENT ON TABLE public.party_motto_proposals IS 'Stores proposed mottos for the party.';
 
+CREATE TABLE IF NOT EXISTS public.peer_assessment_assignments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID REFERENCES public.parties(id) ON DELETE CASCADE NOT NULL,
+    question_id UUID REFERENCES public.questions(id) ON DELETE CASCADE NOT NULL,
+    assessor_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
+    subject_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    CONSTRAINT unique_assessment_assignment UNIQUE (party_id, question_id, assessor_member_id, subject_member_id)
+);
+COMMENT ON TABLE public.peer_assessment_assignments IS 'Stores the pre-calculated assignments for peer assessments to ensure each member is assessed an equal number of times for each stat.';
+COMMENT ON COLUMN public.peer_assessment_assignments.assessor_member_id IS 'The party member who is assigned to perform the assessment.';
+COMMENT ON COLUMN public.peer_assessment_assignments.subject_member_id IS 'The party member who is the subject of the assessment.';
+
 
 -- == 3. CREATE FUNCTIONS ==
-
 CREATE OR REPLACE FUNCTION public.create_party_with_leader(
   p_party_code TEXT,
   p_party_name TEXT,
@@ -198,6 +205,62 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION public.generate_peer_assessment_distribution(p_party_id UUID)
+RETURNS void AS $$
+DECLARE
+    members UUID[];
+    questions_to_assign UUID[];
+    assessor UUID;
+    subject UUID;
+    q_id UUID;
+    assignments_created BOOLEAN;
+BEGIN
+    -- Check if assignments have already been created for this party
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.peer_assessment_assignments
+        WHERE party_id = p_party_id
+    ) INTO assignments_created;
+
+    IF assignments_created THEN
+        RAISE NOTICE 'Peer assessment assignments have already been generated for party %.', p_party_id;
+        RETURN;
+    END IF;
+
+    -- Get all members of the party
+    SELECT array_agg(id) INTO members
+    FROM public.party_members
+    WHERE party_id = p_party_id;
+
+    -- Get all peer-assessment questions
+    SELECT array_agg(id) INTO questions_to_assign
+    FROM public.questions
+    WHERE question_type = 'peer-assessment';
+
+    -- Loop through each question and create assignments
+    FOREACH q_id IN ARRAY questions_to_assign
+    LOOP
+        -- For each member, assign them to assess every other member
+        FOREACH assessor IN ARRAY members
+        LOOP
+            FOREACH subject IN ARRAY members
+            LOOP
+                -- A member does not assess themselves in peer-assessment
+                IF assessor <> subject THEN
+                    INSERT INTO public.peer_assessment_assignments
+                        (party_id, question_id, assessor_member_id, subject_member_id)
+                    VALUES
+                        (p_party_id, q_id, assessor, subject)
+                    ON CONFLICT DO NOTHING;
+                END IF;
+            END LOOP;
+        END LOOP;
+    END LOOP;
+
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+COMMENT ON FUNCTION public.generate_peer_assessment_distribution(UUID) IS 'Generates a round-robin distribution of peer assessment assignments for a given party, ensuring each member assesses every other member for each peer-assessment question.';
+
 CREATE OR REPLACE FUNCTION public.is_party_member(party_id_to_check UUID, user_id_to_check UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -211,7 +274,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- == 4. ENABLE RLS & CREATE POLICIES ==
-
 ALTER TABLE public.parties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.party_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
@@ -220,48 +282,63 @@ ALTER TABLE public.name_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.party_motto_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.peer_assessment_assignments ENABLE ROW LEVEL SECURITY;
 
+-- Policies for public.parties
 CREATE POLICY "Allow authenticated users to create parties" ON public.parties FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Allow users to read parties they are a member of" ON public.parties FOR SELECT TO authenticated USING (true);
 
 -- Policies for public.profiles
-CREATE POLICY "Allow authenticated users to read their own profile"
-ON public.profiles FOR SELECT TO authenticated
-USING (auth.uid() = user_id);
+CREATE POLICY "Allow authenticated users to read their own profile" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Allow authenticated users to insert their own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Allow authenticated users to update their own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = user_id);
 
-CREATE POLICY "Allow authenticated users to insert their own profile"
-ON public.profiles FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Allow authenticated users to update their own profile"
-ON public.profiles FOR UPDATE TO authenticated
-USING (auth.uid() = user_id);
-
+-- Policies for public.party_members
 CREATE POLICY "Allow users to be added to parties" ON public.party_members FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Allow users to see members of their own parties" ON public.party_members FOR SELECT TO authenticated USING (is_party_member(party_id, auth.uid()) OR user_id = auth.uid());
 CREATE POLICY "Allow user to update their own adventurer name" ON public.party_members FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Allow user to update their own assessment status" ON public.party_members FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+-- Policies for public.questions
 CREATE POLICY "Allow all users to read questions" ON public.questions FOR SELECT USING (true);
 
+-- Policies for public.answers
 CREATE POLICY "Allow members to see answers in their party" ON public.answers FOR SELECT USING (is_party_member((SELECT party_id FROM party_members WHERE id = voter_member_id), auth.uid()));
 CREATE POLICY "Allow members to insert their own answers" ON public.answers FOR INSERT WITH CHECK (voter_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
 
+-- Policies for public.name_proposals
 CREATE POLICY "Allow members to see proposals in their party" ON public.name_proposals FOR SELECT USING (is_party_member(party_id, auth.uid()));
 CREATE POLICY "Allow members to insert proposals in their party" ON public.name_proposals FOR INSERT WITH CHECK (proposing_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
 
+-- Policies for public.name_proposal_votes
 CREATE POLICY "Allow members to see votes in their party" ON public.name_proposal_votes FOR SELECT USING ((SELECT is_party_member(party_id, auth.uid()) FROM name_proposals WHERE id = proposal_id));
 CREATE POLICY "Allow members to cast votes in their party" ON public.name_proposal_votes FOR INSERT WITH CHECK (voter_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
 
+-- Policies for public.party_motto_proposals
 CREATE POLICY "Allow members to see motto proposals in their party" ON public.party_motto_proposals FOR SELECT USING (is_party_member(party_id, auth.uid()));
 CREATE POLICY "Allow members to insert motto proposals in their party" ON public.party_motto_proposals FOR INSERT WITH CHECK (proposing_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
 
+-- Policies for public.peer_assessment_assignments
+CREATE POLICY "Allow members to see their own assessment assignments" ON public.peer_assessment_assignments FOR SELECT TO authenticated USING (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));
+CREATE POLICY "Allow members to insert their own assessment assignments" ON public.peer_assessment_assignments FOR INSERT TO authenticated WITH CHECK (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));
 
--- == 5. SEED DEBUG DATA ==
+
+-- == 5. SEED INITIAL DATA ==
+INSERT INTO public.stats (id, name) VALUES
+('STR', 'Strength'),
+('DEX', 'Dexterity'),
+('CON', 'Constitution'),
+('INT', 'Intelligence'),
+('WIS', 'Wisdom'),
+('CHA', 'Charisma')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- == 6. SEED DEBUG DATA ==
 -- This section seeds a debug party for immediate testing after a reset.
 -- NOTE: This requires a user to exist in the `auth.users` table with the
--- specific UUID '00000000-0000-0000-0000-000000000001'.
+-- specific UUID 'fcd61a1f-9393-414b-8048-65a2f3ca8095'.
 -- You can create this user manually in the Supabase dashboard if they do not exist.
-
 DO $$
 DECLARE
   debug_party_id UUID;
@@ -269,20 +346,62 @@ DECLARE
 BEGIN
   -- Create the debug party, ensuring the code is unique
   INSERT INTO public.parties (code, name, motto)
-  VALUES ('DEBUG1', 'The Great Debuggers', 'Occidere omnia insectorum')
+  VALUES ('DEBUG1', 'The Randoms', 'Occidere omnia insectorum')
   ON CONFLICT (code) DO NOTHING
   RETURNING id INTO debug_party_id;
 
   -- Create the debug party leader if the party was created
   IF debug_party_id IS NOT NULL THEN
-    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader)
-    VALUES (debug_party_id, debug_user_id, 'David Bugg', true)
-    ON CONFLICT (party_id, user_id) DO NOTHING;
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (debug_party_id, debug_user_id, 'David Bugg', true, 'Joined', 10, 10, 10, 10, 10, 10);
+
+    -- Add additional debug members with finished status and random stats
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'debug1@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 'debug2@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 'debug3@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Random1', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 'Random2', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 'Random3', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+
+    -- Add self-assessment answers for DEBUG1 members
+    DECLARE
+      debug1_member_ids UUID[];
+      debug1_q_id UUID;
+      debug1_answer_opts JSONB;
+      debug1_member_id UUID;
+    BEGIN
+      SELECT array_agg(id) INTO debug1_member_ids
+      FROM public.party_members
+      WHERE party_id = debug_party_id;
+
+      FOR debug1_q_id, debug1_answer_opts IN
+        SELECT id, answer_options FROM public.questions WHERE question_type = 'self-assessment'
+      LOOP
+        FOREACH debug1_member_id IN ARRAY debug1_member_ids
+        LOOP
+          INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+          VALUES (debug1_q_id, debug1_member_id, debug1_member_id, (debug1_answer_opts[1 + floor(random() * jsonb_array_length(debug1_answer_opts))::int]->>'stat'))
+          ON CONFLICT DO NOTHING;
+        END LOOP;
+      END LOOP;
+    END;
   END IF;
 END $$;
 
 
--- == 6. SEED ADDITIONAL MOCK DATA ==
+-- == 7. SEED ADDITIONAL MOCK DATA ==
 DO $$
 DECLARE
   fellowship_party_id UUID;
@@ -360,7 +479,7 @@ BEGIN
   END IF;
 END $$;
 
--- == 7. ADD TEST PARTY WITH COMPLETED VOTING ==
+-- == 8. ADD TEST PARTY WITH COMPLETED VOTING ==
 DO $$
 DECLARE
   test_party_id UUID;
@@ -383,49 +502,45 @@ DECLARE
 BEGIN
   -- Create the test party
   INSERT INTO public.parties (code, name, motto, status)
-  VALUES ('DEBUG2', 'Test Party', 'Testing is fun!', 'Lobby')
+  VALUES ('DEBUG2', 'The Zeros', 'Testing is fun!', 'Lobby')
   ON CONFLICT (code) DO NOTHING
   RETURNING id INTO test_party_id;
 
-  -- If the party was created, add members
+  -- If the party was created, add members with zero stats
   IF test_party_id IS NOT NULL THEN
-    -- Add mock users to auth.users
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (test_party_id, 'fcd61a1f-9393-414b-8048-65a2f3ca8095', 'Patrick', true, 'Joined', 0, 0, 0, 0, 0, 0)
+    ON CONFLICT (party_id, user_id) DO NOTHING;
+
+    -- Add mock users to auth.users for DEBUG2 additional members
     INSERT INTO auth.users (id, email, encrypted_password, role)
-    VALUES
-      (member1_user_id, 'member1@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
-      (member2_user_id, 'member2@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
-      (member3_user_id, 'member3@test.com', crypt('password123', gen_salt('bf')), 'authenticated'),
-      (member4_user_id, 'member4@test.com', crypt('password123', gen_salt('bf')), 'authenticated')
-    ON CONFLICT (id) DO NOTHING;
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 'finisher1@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 'finisher2@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 'finisher3@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'finisher4@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
 
-    -- Add Patrick (as leader)
-    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, adventurer_name)
-    VALUES (test_party_id, patrick_user_id, 'Patrick', true, 'Joined', 'Test Leader')
-    ON CONFLICT (party_id, user_id) DO NOTHING
-    RETURNING id INTO patrick_member_id;
-
-    -- Add Member 1
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
-    VALUES (test_party_id, member1_user_id, 'Finisher1', 'Finished', 'Finisher 1')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    -- Add other members with zero stats
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 'Zero1', 'Finished', 'Zero 1', 0, 0, 0, 0, 0, 0)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
     RETURNING id INTO member1_id;
 
-    -- Add Member 2
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
-    VALUES (test_party_id, member2_user_id, 'Finisher2', 'Finished', 'Finisher 2')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 'Zero2', 'Finished', 'Zero 2', 0, 0, 0, 0, 0, 0)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
     RETURNING id INTO member2_id;
 
-    -- Add Member 3
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
-    VALUES (test_party_id, member3_user_id, 'Finisher3', 'Finished', 'Finisher 3')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 'Zero3', 'Finished', 'Zero 3', 0, 0, 0, 0, 0, 0)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
     RETURNING id INTO member3_id;
 
-    -- Add Member 4
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name)
-    VALUES (test_party_id, member4_user_id, 'Finisher4', 'Finished', 'Finisher 4')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'Zero4', 'Finished', 'Zero 4', 0, 0, 0, 0, 0, 0)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
     RETURNING id INTO member4_id;
 
     -- Add self-assessment answers for all members
@@ -437,10 +552,10 @@ BEGIN
       FOREACH member_id IN ARRAY member_ids
       LOOP
         INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
-        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int])
+        VALUES (q_id, member_id, member_id, (answer_opts[1 + floor(random() * jsonb_array_length(answer_opts))::int]->>'stat'))
         ON CONFLICT DO NOTHING;
       END LOOP;
     END LOOP;
 
-  END IF;
-END $$;
+  END IF; -- Closing the main IF for DEBUG2
+END $$; -- Closing the last DO block

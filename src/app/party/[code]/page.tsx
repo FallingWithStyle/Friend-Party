@@ -63,6 +63,11 @@ export default function PartyLobbyPage() {
   const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
   const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
 
+  // Add these at the top level
+  const [selfCompleted, setSelfCompleted] = useState(false);
+  const [peerCompleted, setPeerCompleted] = useState(false);
+  const [peerAssessmentLoading, setPeerAssessmentLoading] = useState(false);
+
   // --- Effects ---
   useEffect(() => {
     if (code && typeof code === 'string') getPartyByCode(code);
@@ -173,7 +178,7 @@ export default function PartyLobbyPage() {
     // Optimistically navigate, then update status
     router.push(`/party/${code}/questionnaire`);
 
-    if (currentUserMember.status === 'Joined') {
+    if (currentUserMember.status === 'Lobby') {
         await fetch(`/api/party/${code}/start-questionnaire`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,6 +201,7 @@ export default function PartyLobbyPage() {
           .eq('subject_member_id', currentUserMember.id);
 
         if (selfError) throw selfError;
+        setSelfCompleted(!!(selfAnswers && selfAnswers.length > 0));
 
         // Check for peer-assessment completion
         const { data: peerAnswers, error: peerError } = await supabase
@@ -205,12 +211,9 @@ export default function PartyLobbyPage() {
           .not('subject_member_id', 'eq', currentUserMember.id);
 
         if (peerError) throw peerError;
+        setPeerCompleted(!!(peerAnswers && peerAnswers.length > 0));
 
-        const selfCompleted = selfAnswers && selfAnswers.length > 0;
-        const peerCompleted = peerAnswers && peerAnswers.length > 0;
-
-        setAssessmentsCompleted(selfCompleted && peerCompleted);
-
+        setAssessmentsCompleted(!!(selfAnswers && selfAnswers.length > 0) && !!(peerAnswers && peerAnswers.length > 0));
       } catch (error) {
         console.error('Error checking assessment status:', error);
       }
@@ -261,12 +264,32 @@ export default function PartyLobbyPage() {
               </div>
             ) : (
               <div className="navigation-buttons">
-                <button
-                  onClick={handleStartQuest}
-                  className="navigation-button"
-                >
-                  {currentUserMember.status === 'Joined' ? 'Start QUESTionnaire' : 'Continue QUESTionnaire'}
-                </button>
+                {!selfCompleted && (
+                  <button
+                    onClick={handleStartQuest}
+                    className="navigation-button"
+                  >
+                    {currentUserMember.status === 'Lobby' ? 'Start Self Assessment' : 'Continue Assessment'}
+                  </button>
+                )}
+                {selfCompleted && !peerCompleted && (
+                  <button
+                    className="navigation-button"
+                    onClick={async () => {
+                      setPeerAssessmentLoading(true);
+                      await fetch(`/api/party/${code}/start-questionnaire`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ member_id: currentUserMember.id }),
+                      });
+                      setPeerAssessmentLoading(false);
+                      router.push(`/party/${code}/questionnaire/peer`);
+                    }}
+                    disabled={peerAssessmentLoading}
+                  >
+                    {peerAssessmentLoading ? 'Preparing Peer Assessment...' : 'Start Peer Assessment'}
+                  </button>
+                )}
               </div>
             )}
           </div>

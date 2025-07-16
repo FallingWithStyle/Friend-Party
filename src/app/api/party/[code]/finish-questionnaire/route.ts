@@ -3,16 +3,18 @@ import { createClient } from '@/utils/supabase/server';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
-  const { member_id: memberId } = await request.json();
+  const { member_id: memberId, assessment_type: assessmentType } = await request.json();
+  const { code } = await params;
 
   try {
-    // Update member status to 'Finished'
+    const statusToUpdate = assessmentType === 'self-assessment' ? 'SelfAssessmentCompleted' : 'PeerAssessmentCompleted';
+
     const { error: updateError } = await supabase
       .from('party_members')
-      .update({ status: 'Finished' })
+      .update({ assessment_status: statusToUpdate })
       .eq('id', memberId);
 
     if (updateError) {
@@ -23,34 +25,87 @@ export async function POST(
     const { data: partyData, error: partyError } = await supabase
       .from('parties')
       .select('id')
-      .eq('code', params.code)
+      .eq('code', code)
       .single();
 
     if (partyError) {
       throw partyError;
     }
 
-    const { count: unfinishedCount, error: countError } = await supabase
+    // After updating member status, recalculate party status as the minimum of all member statuses
+    // Fetch all member statuses
+    const { data: allMembers, error: allMembersError } = await supabase
       .from('party_members')
-      .select('*', { count: 'exact', head: true })
-      .eq('party_id', partyData.id)
-      .neq('status', 'Finished');
+      .select('status')
+      .eq('party_id', partyData.id);
 
-    if (countError) {
-      throw countError;
+    if (allMembersError) {
+      throw allMembersError;
     }
 
-    // If all members are finished, invoke the calculation function
-    if (unfinishedCount === 0) {
-      // Don't await this, let it run in the background
-      const { error: invokeError } = await supabase.functions.invoke('calculate-results', {
-        body: { party_id: partyData.id },
-      });
+    // Define status order
+    const statusOrder = ['Lobby', 'Self Assessment', 'Peer Assessment', 'Results'];
+    // Find the minimum status among all members
+    let minStatusIndex = statusOrder.length - 1;
+    for (const m of allMembers) {
+      const idx = statusOrder.indexOf(m.status);
+      if (idx !== -1 && idx < minStatusIndex) {
+        minStatusIndex = idx;
+      }
+    }
+    const newPartyStatus = statusOrder[minStatusIndex];
 
-      if (invokeError) {
-        // Log the error for debugging and throw it to be caught by the catch block
-        console.error('Error invoking calculate-results function:', invokeError);
-        throw invokeError;
+    // Update party status if needed
+    await supabase
+      .from('parties')
+      .update({ status: newPartyStatus })
+      .eq('id', partyData.id);
+
+    if (assessmentType === 'self-assessment') {
+      const { count: unfinishedCount, error: countError } = await supabase
+        .from('party_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('party_id', partyData.id)
+        .neq('assessment_status', 'SelfAssessmentCompleted');
+
+      if (countError) {
+        throw countError;
+      }
+
+      if (unfinishedCount === 0) {
+        await supabase
+          .from('parties')
+          .update({ status: 'Peer Assessment' })
+          .eq('id', partyData.id);
+      }
+    } else if (assessmentType === 'peer-assessment') {
+      const { count: unfinishedCount, error: countError } = await supabase
+        .from('party_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('party_id', partyData.id)
+        .neq('assessment_status', 'PeerAssessmentCompleted');
+
+      if (countError) {
+        throw countError;
+      }
+
+      // If all members have completed peer assessment, invoke the calculation function
+      if (unfinishedCount === 0) {
+        await supabase
+          .from('parties')
+          .update({ status: 'Results' })
+          .eq('id', partyData.id);
+
+        // Don't await this, let it run in the background
+        supabase.functions.invoke('calculate-results', {
+          body: { party_id: partyData.id },
+        }).then(({ error: invokeError }) => {
+          if (invokeError) {
+            console.error('Error invoking calculate-results function:', invokeError);
+            // Optionally, you could add more robust error handling here,
+            // like writing to an error log table in the database.
+          }
+        });
       }
     }
 
