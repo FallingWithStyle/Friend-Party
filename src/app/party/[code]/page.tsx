@@ -447,18 +447,26 @@ export default function PartyLobbyPage() {
             <div className="party-motto-text party-motto-empty">“No motto selected yet.”</div>
           )}
           <button
-            aria-label="Open motto voting"
-            title="Open motto voting"
+            aria-label="Motto voting"
+            title="Motto voting"
             className="party-motto-vote-btn party-motto-vote-btn--red"
             onClick={() => setShowMottoPanel((v) => !v)}
           >
             🏛️
           </button>
         </div>
-        <p className="party-code">Party Code: <span className="party-code-span">{party.code}</span></p>
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1rem' }}>
-          <button className="navigation-button" onClick={copyJoinLink}>Copy Join Link</button>
-        </div>
+        <p className="party-code">
+          Party Code: <span className="party-code-span">{party.code}</span>
+          <button
+            aria-label="Copy join link"
+            title="Copy join link"
+            className="party-motto-vote-btn party-motto-vote-btn--red"
+            style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
+            onClick={copyJoinLink}
+          >
+            🔗
+          </button>
+        </p>
         <UserInfoHandler />
  
         {/* Motto accordion panel */}
@@ -599,9 +607,9 @@ export default function PartyLobbyPage() {
                 <div className="member-subline">
                   <span className="needs-name-text">Needs a Hero Name</span>
                   <button
-                    className="name-panel-toggle"
-                    aria-label="Toggle name voting"
-                    title="Toggle name voting"
+                    className="party-motto-vote-btn party-motto-vote-btn--red"
+                    aria-label="Name voting"
+                    title="Name voting"
                     onClick={() => {
                       setOpenNamePanels((prev) => ({ ...prev, [member.id]: !prev[member.id] }));
                     }}
@@ -611,9 +619,9 @@ export default function PartyLobbyPage() {
                   {!member.is_npc && currentUserMember?.id !== member.id && (
                     <div className="member-options" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <button
-                        className="options-icon"
-                        aria-label="Toggle hireling voting"
-                        title="Toggle hireling voting"
+                        className="party-motto-vote-btn party-motto-vote-btn--red"
+                        aria-label="Hireling voting"
+                        title="Hireling voting"
                         onClick={() => {
                           setOpenHirelingPanels((prev) => ({ ...prev, [member.id]: !prev[member.id] }));
                         }}
