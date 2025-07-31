@@ -139,10 +139,10 @@ export async function POST(
     let proposals: any[] = [];
     const resNew = await supabase
       .from('party_motto_proposals')
-      .select('id, text, vote_count, active, is_finalized')
+      .select('id, text, vote_count, active, is_finalized, created_at')
       .eq('party_id', party.id)
       .eq('active', true);
-  
+
     if (!resNew.error && Array.isArray(resNew.data)) {
       proposals = resNew.data;
     } else {
@@ -156,30 +156,130 @@ export async function POST(
     const threshold = Math.floor(eligible / 2) + 1;
 
     // Find any proposal meeting majority
-    const winner = proposals.find(p => (p.vote_count ?? 0) >= threshold);
-    if (!winner) return;
+    const winner = proposals.find((p) => (p.vote_count ?? 0) >= threshold);
+    if (winner) {
+      // Idempotency: ensure not already finalized/party already set
+      if (winner.is_finalized) return;
 
-    // Idempotency: ensure not already finalized/party already set
-    if (winner.is_finalized) return;
+      // Perform updates
+      const { error: partyUpdErr } = await supabase
+        .from('parties')
+        .update({ motto: winner.text })
+        .eq('id', party.id);
+      if (partyUpdErr) return;
 
-    // Perform updates
-    const { error: partyUpdErr } = await supabase
-      .from('parties')
-      .update({ motto: winner.text })
-      .eq('id', party.id);
-    if (partyUpdErr) return;
+      const { error: markFinalErr } = await supabase
+        .from('party_motto_proposals')
+        .update({ is_finalized: true })
+        .eq('id', winner.id);
+      if (markFinalErr) return;
 
-    const { error: markFinalErr } = await supabase
-      .from('party_motto_proposals')
-      .update({ is_finalized: true })
-      .eq('id', winner.id);
-    if (markFinalErr) return;
+      const { error: deactivateErr } = await supabase
+        .from('party_motto_proposals')
+        .update({ active: false })
+        .eq('party_id', party.id);
+      if (deactivateErr) return;
 
-    const { error: deactivateErr } = await supabase
-      .from('party_motto_proposals')
-      .update({ active: false })
-      .eq('party_id', party.id);
-    if (deactivateErr) return;
+      return;
+    }
+
+    // No strict majority winner; apply Party Morale tie-break with Leader vote (FR21–FR24)
+    const maxCount = Math.max(0, ...proposals.map((p) => p.vote_count ?? 0));
+    const tied = proposals.filter((p) => (p.vote_count ?? 0) === maxCount && maxCount > 0);
+
+    if (tied.length >= 2) {
+      // Determine leader member id
+      const { data: leaderRow } = await supabase
+        .from('party_members')
+        .select('id')
+        .eq('party_id', party.id)
+        .eq('is_leader', true)
+        .maybeSingle();
+      const leaderMemberId: string | null = leaderRow?.id ?? null;
+      if (!leaderMemberId) return;
+
+      // Leader's vote among tied proposals (if any)
+      const tiedIds = tied.map((p) => p.id);
+      const { data: leaderVotes } = await supabase
+        .from('party_motto_votes')
+        .select('proposal_id')
+        .in('proposal_id', tiedIds)
+        .eq('voter_member_id', leaderMemberId)
+        .limit(1);
+      const leaderChoiceId: string | null =
+        leaderVotes && leaderVotes.length > 0 ? (leaderVotes[0].proposal_id as string) : null;
+      if (!leaderChoiceId) return;
+
+      // Tunables
+      const MORALE_HIGH_THRESHOLD = 0.66;
+      const MORALE_LOW_THRESHOLD = 0.33;
+
+      // Compute Party Morale score [0..1] based on participation signals
+      // completionRate: fraction of non-NPC with PeerAssessmentCompleted
+      const { data: pmRows } = await supabase
+        .from('party_members')
+        .select('id, is_npc, assessment_status')
+        .eq('party_id', party.id);
+      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
+      const finished = nonNpc.filter(
+        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
+      );
+      const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
+
+      // votingRate: distinct non-NPC voters participating / non-NPC eligible
+      const { data: allVotes } = await supabase
+        .from('party_motto_votes')
+        .select('voter_member_id, proposal_id');
+      let votingRate = 0;
+      if (allVotes && allVotes.length > 0) {
+        const proposalIds = proposals.map((p) => p.id);
+        const voters = new Set(
+          allVotes
+            .filter((v: any) => proposalIds.includes(v.proposal_id))
+            .map((v: any) => v.voter_member_id)
+        );
+        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id)).length;
+        votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
+      }
+
+      // proposalRate: active proposals per eligible (clamped)
+      const proposalRate = nonNpc.length ? Math.min(proposals.length / nonNpc.length, 1) : 0;
+
+      const morale = (completionRate + votingRate + proposalRate) / 3;
+
+      // Choose winner based on morale and leader's vote
+      let chosen: any | null = null;
+      if (morale >= MORALE_HIGH_THRESHOLD) {
+        // High morale: leader's vote counts positively
+        chosen = tied.find((p) => p.id === leaderChoiceId) ?? null;
+      } else if (morale < MORALE_LOW_THRESHOLD) {
+        // Low morale: leader's vote counts negatively -> pick an opposing tied option
+        chosen = tied.find((p) => p.id !== leaderChoiceId) ?? null;
+      }
+      // For neutral morale band, do not break tie (no-op)
+
+      if (chosen && !chosen.is_finalized) {
+        // Finalize chosen per tie-break
+        const { error: partyUpdErr } = await supabase
+          .from('parties')
+          .update({ motto: chosen.text })
+          .eq('id', party.id);
+        if (partyUpdErr) return;
+
+        const { error: markFinalErr } = await supabase
+          .from('party_motto_proposals')
+          .update({ is_finalized: true })
+          .eq('id', chosen.id);
+        if (markFinalErr) return;
+
+        const { error: deactivateErr } = await supabase
+          .from('party_motto_proposals')
+          .update({ active: false })
+          .eq('party_id', party.id);
+        if (deactivateErr) return;
+      }
+    }
   };
 
   // Fetch any existing vote for this member across proposals in this party
