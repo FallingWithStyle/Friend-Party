@@ -7,11 +7,15 @@ import { createClient } from '@/utils/supabase/server';
 // and deactivates all proposals in the party (active=false).
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  context: { params: Promise<{ code: string }> } | { params: { code: string } }
 ) {
   const supabase = await createClient();
   const body = await request.json().catch(() => ({}));
   const proposalId = body?.proposal_id as string | undefined;
+
+  // Next.js App Router requires awaiting dynamic params in some runtimes
+  const p = (context as any).params;
+  const { code } = typeof p?.then === 'function' ? await (p as Promise<{ code: string }>) : (p as { code: string });
 
   if (!proposalId) {
     return NextResponse.json({ error: 'proposal_id is required' }, { status: 400 });
@@ -27,7 +31,7 @@ export async function POST(
   const { data: party, error: partyErr } = await supabase
     .from('parties')
     .select('id')
-    .eq('code', params.code)
+    .eq('code', code)
     .single();
 
   if (partyErr || !party) {

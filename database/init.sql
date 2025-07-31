@@ -349,8 +349,10 @@ BEGIN
   -- Create the debug party, ensuring the code is unique
   INSERT INTO public.parties (code, name, motto)
   VALUES ('DEBUG1', 'The Randoms', 'Occidere omnia insectorum')
-  ON CONFLICT (code) DO NOTHING
-  RETURNING id INTO debug_party_id;
+  ON CONFLICT (code) DO NOTHING;
+
+  -- Always resolve debug_party_id so subsequent statements are idempotent and scoped
+  SELECT id INTO debug_party_id FROM public.parties WHERE code = 'DEBUG1' LIMIT 1;
 
   -- Create the debug party leader if the party was created
   IF debug_party_id IS NOT NULL THEN
@@ -363,6 +365,124 @@ BEGIN
     INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
     VALUES (debug_party_id, '11111111-2222-3333-4444-555555555555', 'David Bugg', true, 'Joined', 9, 9, 9, 9, 9, 9, TRUE)
     ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
+
+    -- Seed leader-proposed motto for DEBUG1 (idempotent; remove nested DO usage)
+    PERFORM 1 FROM public.party_motto_proposals pmp
+    WHERE pmp.party_id = debug_party_id
+      AND pmp.proposing_member_id = (
+        SELECT pm.id FROM public.party_members pm
+        WHERE pm.party_id = debug_party_id AND pm.is_leader = TRUE
+        ORDER BY pm.created_at LIMIT 1
+      );
+
+    IF NOT FOUND THEN
+      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      SELECT p.id, pm.id, p.motto
+      FROM public.parties p
+      JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
+      WHERE p.id = debug_party_id
+        AND p.motto IS NOT NULL
+        AND length(trim(p.motto)) > 0
+      ON CONFLICT DO NOTHING;
+    END IF;
+
+    -- Seed leader-proposed motto for DEBUG1 (idempotent; no nested DO scope)
+    PERFORM 1 FROM public.party_motto_proposals pmp
+    WHERE pmp.party_id = debug_party_id
+      AND pmp.proposing_member_id = (
+        SELECT pm.id FROM public.party_members pm
+        WHERE pm.party_id = debug_party_id AND pm.is_leader = TRUE
+        ORDER BY pm.created_at LIMIT 1
+      );
+
+    IF NOT FOUND THEN
+      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      SELECT debug_party_id, pm.id, p.motto
+      FROM public.parties p
+      JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
+      WHERE p.id = debug_party_id
+        AND p.motto IS NOT NULL
+        AND length(trim(p.motto)) > 0
+      ON CONFLICT DO NOTHING;
+    END IF;
+
+    -- Leader motto proposal seed for DEBUG1 (idempotent)
+    IF debug_party_id IS NOT NULL THEN
+      PERFORM 1 FROM public.party_motto_proposals
+      WHERE party_id = debug_party_id AND proposing_member_id IN (
+        SELECT id FROM public.party_members WHERE party_id = debug_party_id AND is_leader = TRUE LIMIT 1
+      );
+      IF NOT FOUND THEN
+        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        SELECT debug_party_id, pm.id, p.motto
+        FROM public.parties p
+        JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
+        WHERE p.id = debug_party_id
+          AND p.motto IS NOT NULL
+          AND length(trim(p.motto)) > 0
+        ON CONFLICT DO NOTHING;
+      END IF;
+    END IF;
+
+    -- Seed leader-proposed motto for DEBUG1 if not present (counts as leader's proposal)
+    -- Use variables from the outer DO block; do not open a nested DO scope
+    DECLARE
+      v_exists BOOLEAN;
+      v_leader_id UUID;
+    BEGIN
+      SELECT id INTO v_leader_id
+      FROM public.party_members
+      WHERE party_id = debug_party_id AND is_leader = TRUE
+      ORDER BY created_at LIMIT 1;
+
+      IF v_leader_id IS NOT NULL AND
+         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposing_member_id = v_leader_id) = 0 THEN
+
+        SELECT EXISTS(
+          SELECT 1 FROM public.party_motto_proposals
+          WHERE party_id = debug_party_id
+            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = debug_party_id)
+        ) INTO v_exists;
+
+        IF NOT v_exists THEN
+          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          SELECT debug_party_id, v_leader_id, motto
+          FROM public.parties
+          WHERE id = debug_party_id
+            AND motto IS NOT NULL
+            AND length(trim(motto)) > 0;
+        END IF;
+      END IF;
+    END;
+
+    -- Seed leader-proposed motto for DEBUG1 if not present (counts as leader's proposal)
+    DECLARE
+      v_exists BOOLEAN;
+      v_leader_id UUID;
+    BEGIN
+      SELECT id INTO v_leader_id
+      FROM public.party_members
+      WHERE party_id = debug_party_id AND is_leader = TRUE
+      ORDER BY created_at LIMIT 1;
+
+      IF v_leader_id IS NOT NULL AND
+         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposing_member_id = v_leader_id) = 0 THEN
+        SELECT EXISTS(
+          SELECT 1 FROM public.party_motto_proposals
+          WHERE party_id = debug_party_id
+            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = debug_party_id)
+        ) INTO v_exists;
+
+        IF NOT v_exists THEN
+          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          SELECT debug_party_id, v_leader_id, motto
+          FROM public.parties
+          WHERE id = debug_party_id
+            AND motto IS NOT NULL
+            AND length(trim(motto)) > 0;
+        END IF;
+      END IF;
+     END;
 
     -- Add Patrick as a non-NPC member in DEBUG1 for testing
     INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
@@ -488,6 +608,42 @@ BEGIN
     VALUES (fellowship_party_id, patrick_user_id, 'Patrick', true, 'Joined', 10, 10, 10, 10, 10, 10, FALSE)
     ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO patrick_member_id;
+
+    -- Seed leader-proposed motto as their single proposal if not already present (Fellowship)
+    PERFORM 1 FROM public.party_motto_proposals
+    WHERE party_id = fellowship_party_id AND proposing_member_id = patrick_member_id;
+
+    IF NOT FOUND THEN
+      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      SELECT fellowship_party_id, patrick_member_id, motto
+      FROM public.parties
+      WHERE id = fellowship_party_id
+        AND motto IS NOT NULL
+        AND length(trim(motto)) > 0
+      ON CONFLICT DO NOTHING;
+    END IF;
+
+    -- Seed leader-proposed motto as their single proposal if not already present
+    DECLARE
+      v_exists BOOLEAN;
+    BEGIN
+      IF (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = fellowship_party_id AND proposing_member_id = patrick_member_id) = 0 THEN
+        SELECT EXISTS(
+          SELECT 1 FROM public.party_motto_proposals
+          WHERE party_id = fellowship_party_id
+            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = fellowship_party_id)
+        ) INTO v_exists;
+
+        IF NOT v_exists THEN
+          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          SELECT fellowship_party_id, patrick_member_id, motto
+          FROM public.parties
+          WHERE id = fellowship_party_id
+            AND motto IS NOT NULL
+            AND length(trim(motto)) > 0;
+        END IF;
+      END IF;
+     END;
 
     -- Add Gandalf as NPC
     INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
@@ -670,3 +826,158 @@ BEGIN
 
   END IF; -- Closing the main IF for DEBUG2
 END $$; -- Closing the last DO block
+
+-- == 9. SEED "Hardy Party" ==
+DO $$
+DECLARE
+  hardy_party_id UUID;
+  leader_email TEXT := 'patrickandrewregan@gmail.com';
+  member_email TEXT := 'patrickandrewregan+test@gmail.com';
+
+  leader_user_id UUID;
+  member_user_id UUID;
+
+  leader_member_id UUID;
+  member_member_id UUID;
+
+  -- Reuse David Bugg NPC from DEBUG1
+  david_user_id UUID := '11111111-2222-3333-4444-555555555555';
+  david_member_id UUID;
+BEGIN
+  -- Ensure auth users exist
+  INSERT INTO auth.users (id, email, encrypted_password, role)
+  SELECT gen_random_uuid(), leader_email, crypt('password123', gen_salt('bf')), 'authenticated'
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = leader_email);
+
+  INSERT INTO auth.users (id, email, encrypted_password, role)
+  SELECT gen_random_uuid(), member_email, crypt('password123', gen_salt('bf')), 'authenticated'
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = member_email);
+
+  -- Resolve user ids
+  SELECT id INTO leader_user_id FROM auth.users WHERE email = leader_email LIMIT 1;
+  SELECT id INTO member_user_id FROM auth.users WHERE email = member_email LIMIT 1;
+
+  -- Create party
+  INSERT INTO public.parties (code, name, motto, status)
+  VALUES ('PARTAY', 'Hardy Party', 'Party hard, party hardy', 'Lobby')
+  ON CONFLICT (code) DO NOTHING
+  RETURNING id INTO hardy_party_id;
+
+  IF hardy_party_id IS NOT NULL THEN
+    -- Leader
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, leader_user_id, 'Patrick', true, 'Joined', FALSE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO leader_member_id;
+
+    -- Member
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, member_user_id, 'TestPatrick', false, 'Joined', FALSE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member_member_id;
+
+    -- Ensure David Bugg auth user exists (from DEBUG1) and add as NPC
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES (david_user_id, 'david.bugg@test.com', crypt('password123', gen_salt('bf')), 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, david_user_id, 'David Bugg', false, 'Joined', TRUE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO david_member_id;
+
+    -- Leader's initial motto counts as their single proposal
+    IF leader_member_id IS NOT NULL THEN
+      PERFORM 1 FROM public.party_motto_proposals
+      WHERE party_id = hardy_party_id AND proposing_member_id = leader_member_id;
+
+      IF NOT FOUND THEN
+        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        SELECT hardy_party_id, leader_member_id, motto
+        FROM public.parties
+        WHERE id = hardy_party_id
+          AND motto IS NOT NULL
+          AND length(trim(motto)) > 0
+        ON CONFLICT DO NOTHING;
+      END IF;
+    END IF;
+  END IF;
+END $$;
+
+-- == 9. SEED "Hardy Party" ==
+DO $$
+DECLARE
+  hardy_party_id UUID;
+  leader_email TEXT := 'patrickandrewregan@gmail.com';
+  member_email TEXT := 'patrickandrewregan+test@gmail.com';
+
+  leader_user_id UUID;
+  member_user_id UUID;
+
+  leader_member_id UUID;
+  member_member_id UUID;
+
+  -- Reuse David Bugg NPC from DEBUG1
+  david_user_id UUID := '11111111-2222-3333-4444-555555555555';
+  david_member_id UUID;
+BEGIN
+  -- Ensure auth users exist (simple placeholder password for seed)
+  INSERT INTO auth.users (id, email, encrypted_password, role)
+  SELECT gen_random_uuid(), leader_email, crypt('password123', gen_salt('bf')), 'authenticated'
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = leader_email);
+
+  INSERT INTO auth.users (id, email, encrypted_password, role)
+  SELECT gen_random_uuid(), member_email, crypt('password123', gen_salt('bf')), 'authenticated'
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = member_email);
+
+  -- Resolve user ids
+  SELECT id INTO leader_user_id FROM auth.users WHERE email = leader_email LIMIT 1;
+  SELECT id INTO member_user_id FROM auth.users WHERE email = member_email LIMIT 1;
+
+  -- Create party
+  INSERT INTO public.parties (code, name, motto, status)
+  VALUES ('PARTAY', 'Hardy Party', 'Party hard, party hardy', 'Lobby')
+  ON CONFLICT (code) DO NOTHING
+  RETURNING id INTO hardy_party_id;
+
+  IF hardy_party_id IS NOT NULL THEN
+    -- Insert leader
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, leader_user_id, 'Patrick', true, 'Joined', FALSE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO leader_member_id;
+
+    -- Insert second party member
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, member_user_id, 'TestPatrick', false, 'Joined', FALSE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO member_member_id;
+
+    -- Ensure David Bugg auth user exists (from DEBUG1 seed) and add as NPC
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES (david_user_id, 'david.bugg@test.com', crypt('password123', gen_salt('bf')), 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, is_npc)
+    VALUES (hardy_party_id, david_user_id, 'David Bugg', false, 'Joined', TRUE)
+    ON CONFLICT (party_id, user_id) DO NOTHING
+    RETURNING id INTO david_member_id;
+
+    -- Leader's initial motto counts as their single proposal (if not already present)
+    IF leader_member_id IS NOT NULL THEN
+      PERFORM 1 FROM public.party_motto_proposals
+      WHERE party_id = hardy_party_id AND proposing_member_id = leader_member_id;
+
+      IF NOT FOUND THEN
+        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        SELECT hardy_party_id, leader_member_id, motto
+        FROM public.parties
+        WHERE id = hardy_party_id
+          AND motto IS NOT NULL
+          AND length(trim(motto)) > 0
+        ON CONFLICT DO NOTHING;
+      END IF;
+    END IF;
+
+  END IF;
+END $$;

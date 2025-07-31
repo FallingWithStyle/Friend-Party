@@ -70,6 +70,23 @@ export default function PartyLobbyPage() {
   const [hirelingVoteCountsMap, setHirelingVoteCountsMap] = useState<{ [key: string]: number }>({});
   const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
   const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
+
+  // Track my vote per target member for quick lookup and UI styling
+  const myVotesByTarget = useMemo(() => {
+    if (!currentUserMember) return {} as Record<string, string | undefined>;
+    const map: Record<string, string | undefined> = {};
+    // For each target, find my vote (if any)
+    const proposalsByTarget = proposals.reduce<Record<string, string[]>>((acc, p) => {
+      (acc[p.target_member_id] ||= []).push(p.id);
+      return acc;
+    }, {});
+    for (const targetId of Object.keys(proposalsByTarget)) {
+      const ids = proposalsByTarget[targetId];
+      const my = votes.find(v => v.voter_member_id === currentUserMember.id && ids.includes(v.proposal_id));
+      if (my) map[targetId] = my.proposal_id;
+    }
+    return map;
+  }, [votes, proposals, currentUserMember]);
   const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
   // Expand/collapse per-member name panel (single declaration)
   const [openNamePanels, setOpenNamePanels] = useState<Record<string, boolean>>({});
@@ -123,6 +140,8 @@ export default function PartyLobbyPage() {
              id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
            })));
            setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+           // stash leader proposal id for UI pinning
+           (window as any).__leaderProposalId = json.leaderProposalId ?? null;
          }
        } catch (e) {
          console.warn('Failed to load mottos:', e);
@@ -152,7 +171,24 @@ export default function PartyLobbyPage() {
       if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
       if (payload.eventType === 'UPDATE') setMembers(current => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
     }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
-      if (payload.eventType === 'INSERT') setProposals(current => [...current, payload.new as NameProposal]);
+      if (payload.eventType === 'INSERT') {
+        const np = payload.new as NameProposal;
+        setProposals(current => {
+          // If an optimistic placeholder exists for same proposer/target/name, replace it
+          const idx = current.findIndex(p =>
+            p.id.startsWith('optimistic-') &&
+            p.target_member_id === np.target_member_id &&
+            p.proposing_member_id === np.proposing_member_id &&
+            p.proposed_name === np.proposed_name
+          );
+          if (idx >= 0) {
+            const copy = current.slice();
+            copy[idx] = np;
+            return copy;
+          }
+          return [...current, np];
+        });
+      }
       if (payload.eventType === 'UPDATE') {
         const updated = payload.new as NameProposal;
         if (!updated.is_active) { // If proposal becomes inactive, remove it and its votes
@@ -163,8 +199,6 @@ export default function PartyLobbyPage() {
         }
       }
     }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload: any) => {
-      // We need to fetch the proposal party_id to ensure it belongs to this party
-      // This is a simplified approach for the subscription payload
       setVotes(current => [...current, payload.new as NameProposalVote]);
     })
     // Motto proposals and votes realtime
@@ -190,6 +224,7 @@ export default function PartyLobbyPage() {
           })));
           setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
           setPartyMotto(json.partyMotto ?? null);
+          (window as any).__leaderProposalId = json.leaderProposalId ?? null;
         })
         .catch(() => {});
     })
@@ -275,19 +310,79 @@ export default function PartyLobbyPage() {
 
   // --- API Handlers ---
   const handleProposeName = async (targetMemberId: string) => {
-    const proposedName = nameProposalInput[targetMemberId];
+    const proposedName = (nameProposalInput[targetMemberId] ?? '').trim();
     if (!proposedName || !currentUserMember) return;
 
-    const response = await fetch(`/api/party/${code}/propose-name`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_member_id: targetMemberId, proposed_name: proposedName }),
+    // Optimistic: append proposal immediately for snappy UX
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticProposal: NameProposal = {
+      id: optimisticId,
+      target_member_id: targetMemberId,
+      proposing_member_id: currentUserMember.id,
+      proposed_name: proposedName,
+      is_active: true,
+    };
+    setProposals(prev => [...prev, optimisticProposal]);
+    setNameProposalInput(prev => ({ ...prev, [targetMemberId]: '' }));
+
+    try {
+      const response = await fetch(`/api/party/${code}/propose-name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_member_id: targetMemberId, proposed_name: proposedName }),
+      });
+
+      if (response.ok) {
+        const created = await response.json();
+        // Replace optimistic with real
+        setProposals(prev =>
+          prev.map(p => (p.id === optimisticId ? created : p))
+        );
+        // Also reflect auto-vote in local voteCounts by pushing a vote record
+        // The backend inserts a vote; realtime may take a moment so we mirror locally
+        setVotes(prev => [
+          ...prev,
+          { id: `optimistic-v-${Date.now()}`, proposal_id: created.id, voter_member_id: currentUserMember.id },
+        ]);
+      } else {
+        // Revert optimistic insert on failure
+        setProposals(prev => prev.filter(p => p.id !== optimisticId));
+        console.error('Failed to propose name');
+      }
+    } catch (e) {
+      setProposals(prev => prev.filter(p => p.id !== optimisticId));
+      console.error('Failed to propose name', e);
+    }
+  };
+
+  // Switch my vote to a different proposal for the same target (optimistic; realtime will reconcile)
+  const handleChangeVote = async (proposalId: string) => {
+    const target = proposals.find((p) => p.id === proposalId)?.target_member_id;
+    if (!currentUserMember || !target) return;
+
+    setVotes((prev) => {
+      const idsForTarget = proposals.filter(p => p.target_member_id === target).map(p => p.id);
+      const withoutMine = prev.filter(
+        (v) => v.voter_member_id !== currentUserMember.id || !idsForTarget.includes(v.proposal_id)
+      );
+      return [
+        ...withoutMine,
+        {
+          id: `optimistic-v-${Date.now()}`,
+          proposal_id: proposalId,
+          voter_member_id: currentUserMember.id,
+        } as NameProposalVote,
+      ];
     });
 
-    if (response.ok) {
-      setNameProposalInput(prev => ({ ...prev, [targetMemberId]: '' }));
-    } else {
-      console.error('Failed to propose name');
+    try {
+      await fetch(`/api/party/${code}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: proposalId }),
+      });
+    } catch {
+      // ignore; subscription will resync
     }
   };
 
@@ -419,16 +514,8 @@ export default function PartyLobbyPage() {
     }
   };
 
-  const handleFinalizeMotto = async (proposalId: string) => {
-    const resp = await fetch(`/api/party/${code}/finalize-motto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposal_id: proposalId }),
-    });
-    if (!resp.ok) {
-      console.error('Failed to finalize motto');
-    }
-  };
+  // Finalization is automatic on majority; keep stub for backward compatibility (no-op).
+  const handleFinalizeMotto = async (_proposalId: string) => {};
 
   const copyJoinLink = () => {
     if (typeof window === 'undefined') return;
@@ -474,39 +561,68 @@ export default function PartyLobbyPage() {
           <div className="motto-panel">
             <div className="motto-panel__header">Party Motto Voting</div>
             <div className="motto-panel__body">
+              {/* If there was a leader-suggested motto at creation time but it's not finalized yet,
+                  surface it first as a pinned suggestion so it doesn't get lost. We infer this
+                  as: party.motto is null AND there exists exactly one proposal created early.
+                  Since we do not have created_by/created_at context here, we simply pin the
+                  first proposal if not finalized. */}
+              {/* Pin leader-proposed motto (from server) when available and not finalized */}
+              {!partyMotto && Array.isArray(mottoProposals) && (window as any).__leaderProposalId && (() => {
+                const lpId = (window as any).__leaderProposalId as string;
+                const lp = mottoProposals.find(p => p.id === lpId);
+                if (!lp || lp.is_finalized === true || lp.active === false) return null;
+                return (
+                  <div className="proposal-item motto-item motto-item--pinned" style={{ marginBottom: '0.5rem' }}>
+                    <span className="motto-text">Leader’s suggested motto</span>
+                    <span className="vote-count" style={{ marginLeft: 'auto' }}>{lp.text}</span>
+                  </div>
+                );
+              })()}
               {currentUserMember && (
-                <div className="motto-panel__propose">
+                <form
+                  className="motto-panel__propose"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleProposeMotto();
+                  }}
+                >
                   <input
-                    className="propose-name-input"
+                    className="propose-name-input motto-input"
                     placeholder="Propose a party motto…"
                     value={newMottoText}
                     onChange={(e) => setNewMottoText(e.target.value)}
                   />
-                  <button className="propose-name-button" onClick={handleProposeMotto}>Propose</button>
-                </div>
+                  <button type="submit" className="propose-name-button motto-propose-btn">Propose</button>
+                </form>
               )}
+
               <div className="proposals-container">
                 {mottoProposals.length === 0 ? (
                   <p className="no-proposals-text">No motto proposals yet.</p>
                 ) : (
                   mottoProposals.map((p) => {
+                    // Skip duplicate rendering of pinned leader proposal
+                    const lpId = (window as any).__leaderProposalId as string | null;
+                    if (!partyMotto && lpId && p.id === lpId) return null;
                     const isMine = myMottoVoteProposalId === p.id;
+                    const eligible = members.filter(m => !m.is_npc).length || 0;
+                    const threshold = Math.floor(eligible / 2) + 1;
+                    const finalized = p.is_finalized || !p.active;
                     return (
-                      <div key={p.id} className="proposal-item">
-                        <span>{p.text}</span>
+                      <div key={p.id} className={`proposal-item motto-item ${finalized ? 'motto-item--final' : ''}`}>
+                        <span className="motto-text">{p.text}</span>
                         <div className="flex items-center gap-3">
-                          <span className="vote-count">{p.vote_count || 0}</span>
-                          {!p.is_finalized && p.active && (
-                            <>
-                              {isMine ? (
-                                <button className="vote-button" onClick={() => handleVoteMotto(null)}>Unvote</button>
-                              ) : (
-                                <button className="vote-button" onClick={() => handleVoteMotto(p.id)}>Vote</button>
-                              )}
-                              {currentUserMember?.is_leader && (
-                                <button className="choose-name-button" onClick={() => handleFinalizeMotto(p.id)}>Finalize</button>
-                              )}
-                            </>
+                          <span className="vote-count">
+                            {p.vote_count || 0}{eligible > 0 ? `/${threshold}` : ''}
+                          </span>
+                          {!finalized ? (
+                            isMine ? (
+                              <button className="vote-button motto-vote-btn" onClick={() => handleVoteMotto(null)}>Unvote</button>
+                            ) : (
+                              <button className="vote-button motto-vote-btn" onClick={() => handleVoteMotto(p.id)}>Vote</button>
+                            )
+                          ) : (
+                            <span className="vote-count" title="Finalized">✔</span>
                           )}
                         </div>
                       </div>
@@ -514,48 +630,6 @@ export default function PartyLobbyPage() {
                   })
                 )}
               </div>
-            </div>
-            {currentUserMember && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    className="propose-name-input"
-                    placeholder="Propose a party motto…"
-                    value={newMottoText}
-                    onChange={(e) => setNewMottoText(e.target.value)}
-                  />
-                  <button className="propose-name-button" onClick={handleProposeMotto}>Propose</button>
-                </div>
-              </div>
-            )}
-            <div className="proposals-container" style={{ marginTop: '0.75rem' }}>
-              {mottoProposals.length === 0 ? (
-                <p className="no-proposals-text">No motto proposals yet.</p>
-              ) : (
-                mottoProposals.map((p) => {
-                  const isMine = myMottoVoteProposalId === p.id;
-                  return (
-                    <div key={p.id} className="proposal-item">
-                      <span>{p.text}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="vote-count">{p.vote_count || 0}</span>
-                        {!p.is_finalized && p.active && (
-                          <>
-                            {isMine ? (
-                              <button className="vote-button" onClick={() => handleVoteMotto(null)}>Unvote</button>
-                            ) : (
-                              <button className="vote-button" onClick={() => handleVoteMotto(p.id)}>Vote</button>
-                            )}
-                            {currentUserMember?.is_leader && (
-                              <button className="choose-name-button" onClick={() => handleFinalizeMotto(p.id)}>Finalize</button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
             </div>
           </div>
         )}
@@ -695,34 +769,59 @@ export default function PartyLobbyPage() {
                     )}
 
                     <div className="proposals-container">
-                      {memberProposals.map(p => (
-                        <div key={p.id} className="proposal-item">
-                          <span>{p.proposed_name}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="vote-count">{voteCounts[p.id] || 0}</span>
-                            {canVote && (
-                              <button onClick={() => handleCastVote(p.id)} className="vote-button">Vote</button>
-                            )}
+                      {memberProposals.map(p => {
+                        const iVoted = myVotesByTarget[member.id] === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            className="proposal-item"
+                            style={iVoted ? { borderColor: 'var(--secondary)', boxShadow: '0 0 0 2px rgba(0,0,0,0.03) inset' } : undefined}
+                          >
+                            <span>
+                              {p.proposed_name}
+                              {iVoted ? <span className="icon" title="Your vote" aria-label="Your vote"> ✅</span> : null}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="vote-count">{voteCounts[p.id] || 0}</span>
+                              {/* If I already voted for a different proposal on this same target, allow changing vote */}
+                              {currentUserMember?.id !== member.id ? (
+                                myVotesByTarget[member.id] && myVotesByTarget[member.id] !== p.id ? (
+                                  <button onClick={() => handleChangeVote(p.id)} className="vote-button">Change vote</button>
+                                ) : !myVotesByTarget[member.id] ? (
+                                  <button onClick={() => handleCastVote(p.id)} className="vote-button">Vote</button>
+                                ) : (
+                                  // Already voted this one; no button, highlight is enough
+                                  <span className="text-xs" style={{ color: 'var(--muted)' }}>Your choice</span>
+                                )
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {memberProposals.length === 0 && <p className="no-proposals-text">No names proposed yet.</p>}
                     </div>
 
-                    {currentUserMember && currentUserMember.id !== member.id && (
-                      <div className="propose-name-container">
-                        <input
-                          type="text"
-                          value={nameProposalInput[member.id] || ''}
-                          onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
-                          placeholder="Propose a name..."
-                          className="propose-name-input"
-                        />
-                        <button onClick={() => handleProposeName(member.id)} className="propose-name-button">
-                          Propose
-                        </button>
-                      </div>
-                    )}
+                    {currentUserMember && currentUserMember.id !== member.id && (() => {
+                      // Hide propose UI if the current user already proposed a name for this target
+                      const alreadyProposedByMe = proposals.some(
+                        p => p.target_member_id === member.id && p.proposing_member_id === currentUserMember.id && p.is_active
+                      );
+                      if (alreadyProposedByMe) return null;
+                      return (
+                        <div className="propose-name-container">
+                          <input
+                            type="text"
+                            value={nameProposalInput[member.id] || ''}
+                            onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
+                            placeholder="Propose a name..."
+                            className="propose-name-input"
+                          />
+                          <button onClick={() => handleProposeName(member.id)} className="propose-name-button">
+                            Propose
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

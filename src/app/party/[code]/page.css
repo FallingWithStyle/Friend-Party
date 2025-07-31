@@ -463,16 +463,17 @@
 .motto-panel {
   margin-top: 0.75rem;
   border: 1px solid var(--border);
-  background: #faf4e6; /* parchment-like */
+  background: var(--card);
   border-radius: 8px;
   overflow: hidden;
 }
 .motto-panel__header {
-  background: #e6d8b8; /* darker parchment band */
-  color: #3f2e12;
-  font-weight: 700;
+  background: var(--background);
+  color: var(--primary);
+  font-weight: 800;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
+  letter-spacing: 0.3px;
 }
 .motto-panel__body {
   padding: 0.75rem;
@@ -482,7 +483,26 @@
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
+.motto-input {
+  background: var(--background);
+  border-radius: 6px;
+}
+.motto-propose-btn, .motto-vote-btn {
+  border-radius: 6px;
+}
+.motto-item {
+  background: var(--background);
+}
+.motto-item--final {
+  border-color: #16a34a; /* green-600 */
+  box-shadow: 0 0 0 2px rgba(22,163,74,0.08) inset;
+}
+.motto-text {
+  color: var(--primary);
+  font-weight: 600;
+}
 
+/* Keep existing helpers */
 .no-proposals-text {
   font-size: 0.875rem;
   color: var(--muted);

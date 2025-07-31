@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  context: { params: Promise<{ code: string }> } | { params: { code: string } }
 ) {
   const supabase = await createClient();
-  const { code } = params;
+  const p = (context as any).params;
+  const { code } = typeof p?.then === 'function' ? await (p as Promise<{ code: string }>) : (p as { code: string });
 
   const {
     data: { user },
@@ -86,5 +87,8 @@ export async function POST(
     );
   }
 
+  // Intentionally do NOT auto-cast a vote; proposer may choose to vote later.
+
+  // Return the newly created proposal (client can optimistic-append; realtime will update counts)
   return NextResponse.json(newProposal);
 }
