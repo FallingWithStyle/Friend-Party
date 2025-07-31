@@ -2,6 +2,20 @@
   padding: 2rem;
 }
 
+/* Match Propose button red for motto vote button */
+.party-motto-vote-btn--red {
+  /* Default: darker red background, light text */
+  background: #991b1b; /* red-800 */
+  color: #fff;
+  border-color: #7f1d1d; /* red-900 */
+}
+.party-motto-vote-btn--red:hover {
+  /* Hover: lighter red background, light text (to match Propose hover feel) */
+  background: #b91c1c; /* red-700 */
+  color: #fff;
+  border-color: #991b1b; /* red-800 */
+}
+
 .party-lobby-card {
   max-width: 56rem;
   margin: 0 auto;
@@ -15,6 +29,31 @@
   text-align: center;
   color: var(--primary);
   margin-bottom: 0.5rem;
+}
+.party-motto-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.party-motto-text {
+  font-size: 1.1rem;
+  font-style: italic;
+  color: var(--secondary);
+}
+.party-motto-empty {
+  color: var(--muted);
+}
+.party-motto-vote-btn {
+  border: 1px solid var(--border);
+  background: var(--background);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+.party-motto-vote-btn:hover {
+  background: var(--card);
 }
 
 .party-code {
@@ -43,6 +82,15 @@
   cursor: pointer;
 }
 
+.party-motto-vote-btn--red {
+  background: #b91c1c; /* red-700 */
+  color: #fff;
+  border-color: #7f1d1d; /* red-800 */
+}
+.party-motto-vote-btn--red:hover {
+  background: #991b1b; /* red-800 */
+}
+
 .members-title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -50,20 +98,307 @@
 }
 
 .members-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: stretch; /* ensure equal height columns */
+  grid-auto-rows: 1fr; /* consistent row height based on tallest item in row */
+}
+@media (min-width: 640px) {
+  .members-container {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 1024px) {
+  .members-container {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
 
 .member-card {
+  position: relative;
+  display: flex;             /* make card a flex column */
+  flex-direction: column;
+  height: 100%;              /* fill grid cell height */
+  min-height: 180px;         /* guardrail so short-content cards don't collapse */
   padding: 1rem;
   border: 1px solid var(--border);
   background-color: var(--background);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  box-sizing: border-box;    /* include padding/border in height calc */
+  overflow: hidden;          /* prevent child overflow causing overlap */
+}
+.member-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--secondary);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+.member-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .member-name {
-  font-size: 1.25rem;
-  font-weight: bold;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* tighten inline icon sizing so crowns/shields don't push layout */
+.member-name .icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  margin-left: 0.15rem;
+}
+
+/* small inline icon next to names */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  margin-left: 0.25rem;
+}
+
+.member-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+/* kebab button for options */
+.options-icon {
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.options-icon:hover {
+  background: var(--card);
+}
+
+/* floating action menu for member options */
+.vote-menu {
+  position: absolute;
+  top: 120%;
+  right: 0;
+  min-width: 200px;
+  background: #faf4e6; /* parchment-esque */
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+  padding: 0.5rem;
+  z-index: 10;
+}
+.vote-menu button {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--primary);
+}
+.vote-menu button:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.member-card__body {
+  margin-top: 0.5rem;
+  flex: 1 1 auto;      /* body grows to fill available space */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;         /* consistent spacing between internal sections */
+  min-height: 60px;    /* stabilize varying content like forms/badges */
+}
+
+.member-adventureline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.adventurer-name {
+  font-size: 1.05rem;
+  color: var(--secondary);
+  font-weight: 700;
+}
+
+.member-exp-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.85rem;
+  color: var(--primary);
+}
+
+.member-subline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Style for the needs-name indicator */
+.needs-name-text {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* Optional: style the name panel toggle to be compact */
+.name-panel-toggle {
+  margin-left: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+.name-panel-toggle:hover {
+  background: var(--card);
+}
+
+/* proposals shared look */
+.proposals-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.proposal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);   /* solid border to match inputs */
+  border-radius: 8px;                /* rounded corners to match inputs */
+  background: var(--background);
+}
+
+.vote-count {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--secondary);
+  margin-right: 0.5rem; /* extra space before button */
+}
+
+.vote-button, .choose-name-button {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--primary-foreground);
+  background-color: var(--accent);  /* unify with propose button color */
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;               /* same rounding as proposal-item */
+}
+.vote-button:hover, .choose-name-button:hover {
+  filter: brightness(0.95);
+}
+
+.no-proposals-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* subtle separator for sections within a card */
+.member-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+/* footer area for any bottom-aligned actions if needed */
+.member-card__footer {
+  margin-top: 0.75rem;
+}
+
+/* (duplicate removed) */
+
+.proposal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+}
+
+.vote-count {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--secondary);
+}
+
+.vote-button, .choose-name-button {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--primary-foreground);
+  background-color: var(--secondary);
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.vote-button:hover, .choose-name-button:hover {
+  filter: brightness(0.95);
+}
+
+.no-proposals-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* subtle separator for sections within a card */
+.member-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Subline under the member name for status tags and controls */
+.member-subline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Style for the needs-name indicator */
+.needs-name-text {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* Keep hireling tag looking like a secondary badge even when on subline */
+.hireling-tag {
+  margin-left: 0.25rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* Optional: style the name panel toggle to be compact */
+.name-panel-toggle {
+  margin-left: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+.name-panel-toggle:hover {
+  background: var(--card);
 }
 
 .adventurer-name {
@@ -96,39 +431,44 @@
 }
 
 .choose-name-button {
-  padding: 0.25rem 0.75rem;
+  padding: 0.35rem 0.9rem;
   font-size: 0.875rem;
   color: var(--primary-foreground);
   background-color: var(--accent);
   border: none;
   cursor: pointer;
+  border-radius: 8px;
 }
 
-.proposals-container {
+/* (duplicate removed) */
+
+/* (duplicate removed) */
+
+/* (duplicate removed) */
+
+/* (duplicate removed) */
+/* Distinct motto voting panel */
+.motto-panel {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  background: #faf4e6; /* parchment-like */
+  border-radius: 8px;
+  overflow: hidden;
+}
+.motto-panel__header {
+  background: #e6d8b8; /* darker parchment band */
+  color: #3f2e12;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.motto-panel__body {
+  padding: 0.75rem;
+}
+.motto-panel__propose {
   display: flex;
-  flex-direction: column;
   gap: 0.5rem;
-}
-
-.proposal-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.vote-count {
-  font-weight: bold;
-  font-size: 1.125rem;
-  color: var(--secondary);
-}
-
-.vote-button {
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-  color: var(--primary-foreground);
-  background-color: var(--secondary);
-  border: none;
-  cursor: pointer;
+  margin-bottom: 0.75rem;
 }
 
 .no-proposals-text {
@@ -143,6 +483,12 @@
   padding-top: 1rem;
   margin-top: 1rem;
   border-top: 1px solid var(--border);
+}
+
+/* Special: give hireling vote a dotted outline variant while keeping other proposal items solid */
+.proposal-item--dotted {
+  border-style: dashed;
+  background: rgba(0,0,0,0.02);
 }
 
 .propose-name-input {

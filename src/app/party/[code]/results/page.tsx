@@ -102,14 +102,15 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
     const fetchResults = async (currentPartyId: string) => {
         if (!supabase) return;
-
+ 
         // Prefer ResultsReady if already computed; otherwise allow Results as well
         const { data: party, error: partyErr } = await supabase
           .from('parties')
-          .select('status')
+          .select('status, motto')
           .eq('id', currentPartyId)
           .single();
         if (partyErr) throw partyErr;
+        setPartyMotto(party?.motto ?? null);
 
         // Always fetch members for display (including NPCs)
         const { data: membersData, error: membersError } = await supabase
@@ -313,9 +314,17 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     });
   };
 
+  // Local state for party meta
+  const [partyMotto, setPartyMotto] = useState<string | null>(null);
+
   return (
     <div className="results-container">
       <h1 className="results-title">Party Results</h1>
+      {partyMotto ? (
+        <div style={{ textAlign: 'center', marginBottom: '1rem', fontStyle: 'italic' }}>
+          “{partyMotto}”
+        </div>
+      ) : null}
 
       {/* Share section at top for visibility */}
       <div className="share-results-section" style={{ marginBottom: '1rem' }}>

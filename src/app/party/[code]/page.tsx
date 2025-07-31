@@ -60,17 +60,27 @@ export default function PartyLobbyPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [proposals, setProposals] = useState<NameProposal[]>([]);
   const [votes, setVotes] = useState<NameProposalVote[]>([]);
+  // Motto state
+  const [partyMotto, setPartyMotto] = useState<string | null>(null);
+  const [mottoProposals, setMottoProposals] = useState<Array<{ id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }>>([]);
+  const [myMottoVoteProposalId, setMyMottoVoteProposalId] = useState<string | null>(null);
+  const [newMottoText, setNewMottoText] = useState('');
+  const [showMottoPanel, setShowMottoPanel] = useState(false);
   // Track hireling votes as a stable count map keyed by target member id
   const [hirelingVoteCountsMap, setHirelingVoteCountsMap] = useState<{ [key: string]: number }>({});
   const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
   const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
   const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
-  const [showVoteMenu, setShowVoteMenu] = useState<string | null>(null); // State to control which member's vote menu is open
+  // Expand/collapse per-member name panel (single declaration)
+  const [openNamePanels, setOpenNamePanels] = useState<Record<string, boolean>>({});
+  // Toggle for showing Hireling vote panel per member
+  const [openHirelingPanels, setOpenHirelingPanels] = useState<Record<string, boolean>>({});
 
   // Add these at the top level
   const [selfCompleted, setSelfCompleted] = useState(false);
   const [peerCompleted, setPeerCompleted] = useState(false);
   const [peerAssessmentLoading, setPeerAssessmentLoading] = useState(false);
+  // Expand/collapse per-member name panel (single source of truth)
 
   // --- Effects ---
   useEffect(() => {
@@ -96,13 +106,28 @@ export default function PartyLobbyPage() {
     const fetchData = async () => {
        const { data: memberData } = await supabase.from('party_members').select('*').eq('party_id', party.id).order('created_at');
        if (memberData) setMembers(memberData);
- 
+
        const { data: proposalData } = await supabase.from('name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
        if (proposalData) setProposals(proposalData);
- 
+
        const { data: voteData } = await supabase.from('name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
        if (voteData) setVotes(voteData as VoteWithProposalParty[]);
- 
+
+       // Fetch motto data via API aggregator
+       try {
+         const resp = await fetch(`/api/party/${code}/mottos`, { cache: 'no-store' });
+         if (resp.ok) {
+           const json = await resp.json();
+           setPartyMotto(json.partyMotto ?? null);
+           setMottoProposals((json.proposals ?? []).map((p: any) => ({
+             id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+           })));
+           setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+         }
+       } catch (e) {
+         console.warn('Failed to load mottos:', e);
+       }
+
        const { data: hirelingVoteData, error: hirelingVoteError } = await supabase
          .from('hireling_conversion_votes')
          .select('party_member_id_being_voted_on, vote');
@@ -141,6 +166,32 @@ export default function PartyLobbyPage() {
       // We need to fetch the proposal party_id to ensure it belongs to this party
       // This is a simplified approach for the subscription payload
       setVotes(current => [...current, payload.new as NameProposalVote]);
+    })
+    // Motto proposals and votes realtime
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
+      const row = payload.new;
+      if (payload.eventType === 'INSERT') {
+        setMottoProposals(curr => [...curr, { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }]);
+      } else if (payload.eventType === 'UPDATE') {
+        setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
+        if (row.is_finalized) setPartyMotto(row.text);
+      } else if (payload.eventType === 'DELETE') {
+        setMottoProposals(curr => curr.filter(p => p.id !== payload.old.id));
+      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload: any) => {
+      // Simple refetch of vote state to stay consistent
+      fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          if (!json) return;
+          setMottoProposals((json.proposals ?? []).map((p: any) => ({
+            id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+          })));
+          setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+          setPartyMotto(json.partyMotto ?? null);
+        })
+        .catch(() => {});
     })
     // Listen to backend broadcasts for hireling voting updates
     .on('broadcast', { event: 'hireling_vote_updated' }, (payload: any) => {
@@ -258,7 +309,6 @@ export default function PartyLobbyPage() {
 
   const handleVoteToMakeHireling = async (targetMemberId: string) => {
     if (!currentUserMember) return;
-    setShowVoteMenu(null); // Close menu after clicking
 
     const response = await fetch(`/api/party/${code}/vote-hireling-conversion`, {
       method: 'POST',
@@ -344,68 +394,189 @@ export default function PartyLobbyPage() {
     };
   };
 
+  const handleProposeMotto = async () => {
+    const t = newMottoText.trim();
+    if (!t) return;
+    const resp = await fetch(`/api/party/${code}/propose-motto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: t }),
+    });
+    if (resp.ok) {
+      setNewMottoText('');
+      // refreshed via realtime or can refetch
+    }
+  };
+
+  const handleVoteMotto = async (proposalId: string | null) => {
+    const resp = await fetch(`/api/party/${code}/vote-motto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    });
+    if (!resp.ok) {
+      console.error('Failed to cast/un-cast motto vote');
+    }
+  };
+
+  const handleFinalizeMotto = async (proposalId: string) => {
+    const resp = await fetch(`/api/party/${code}/finalize-motto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    });
+    if (!resp.ok) {
+      console.error('Failed to finalize motto');
+    }
+  };
+
+  const copyJoinLink = () => {
+    if (typeof window === 'undefined') return;
+    const url = `${window.location.origin}/party/${code}/join`;
+    navigator.clipboard.writeText(url).catch(() => {});
+  };
+
   return (
     <div className="party-lobby-container">
       <div className="party-lobby-card">
         <h1 className="party-lobby-title">{party.name}</h1>
+        <div className="party-motto-row">
+          {partyMotto ? (
+            <div className="party-motto-text">“{partyMotto}”</div>
+          ) : (
+            <div className="party-motto-text party-motto-empty">“No motto selected yet.”</div>
+          )}
+          <button
+            aria-label="Open motto voting"
+            title="Open motto voting"
+            className="party-motto-vote-btn party-motto-vote-btn--red"
+            onClick={() => setShowMottoPanel((v) => !v)}
+          >
+            🏛️
+          </button>
+        </div>
         <p className="party-code">Party Code: <span className="party-code-span">{party.code}</span></p>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1rem' }}>
+          <button className="navigation-button" onClick={copyJoinLink}>Copy Join Link</button>
+        </div>
         <UserInfoHandler />
-        
-        {currentUserMember && (
-          <div className="navigation-container">
-            {assessmentsCompleted ? (
-              <div className="navigation-buttons">
-                <button
-                  onClick={() => router.push(`/party/${code}/results`)}
-                  className="navigation-button"
-                >
-                  View Results
-                </button>
+ 
+        {/* Motto accordion panel */}
+        {showMottoPanel && (
+          <div className="motto-panel">
+            <div className="motto-panel__header">Party Motto Voting</div>
+            <div className="motto-panel__body">
+              {currentUserMember && (
+                <div className="motto-panel__propose">
+                  <input
+                    className="propose-name-input"
+                    placeholder="Propose a party motto…"
+                    value={newMottoText}
+                    onChange={(e) => setNewMottoText(e.target.value)}
+                  />
+                  <button className="propose-name-button" onClick={handleProposeMotto}>Propose</button>
+                </div>
+              )}
+              <div className="proposals-container">
+                {mottoProposals.length === 0 ? (
+                  <p className="no-proposals-text">No motto proposals yet.</p>
+                ) : (
+                  mottoProposals.map((p) => {
+                    const isMine = myMottoVoteProposalId === p.id;
+                    return (
+                      <div key={p.id} className="proposal-item">
+                        <span>{p.text}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="vote-count">{p.vote_count || 0}</span>
+                          {!p.is_finalized && p.active && (
+                            <>
+                              {isMine ? (
+                                <button className="vote-button" onClick={() => handleVoteMotto(null)}>Unvote</button>
+                              ) : (
+                                <button className="vote-button" onClick={() => handleVoteMotto(p.id)}>Vote</button>
+                              )}
+                              {currentUserMember?.is_leader && (
+                                <button className="choose-name-button" onClick={() => handleFinalizeMotto(p.id)}>Finalize</button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            ) : (
-              <div className="navigation-buttons">
-                {!selfCompleted && (
-                  <button
-                    onClick={handleStartQuest}
-                    className="navigation-button"
-                  >
-                    {currentUserMember.status === 'Lobby' ? 'Start Self Assessment' : 'Continue Assessment'}
-                  </button>
-                )}
-                {selfCompleted && !peerCompleted && (
-                  <button
-                    className="navigation-button"
-                    onClick={async () => {
-                      setPeerAssessmentLoading(true);
-                      await fetch(`/api/party/${code}/start-questionnaire`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ member_id: currentUserMember.id }),
-                      });
-                      setPeerAssessmentLoading(false);
-                      router.push(`/party/${code}/questionnaire/peer`);
-                    }}
-                    disabled={peerAssessmentLoading}
-                  >
-                    {peerAssessmentLoading ? 'Preparing Peer Assessment...' : 'Start Peer Assessment'}
-                  </button>
-                )}
+            </div>
+            {currentUserMember && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    className="propose-name-input"
+                    placeholder="Propose a party motto…"
+                    value={newMottoText}
+                    onChange={(e) => setNewMottoText(e.target.value)}
+                  />
+                  <button className="propose-name-button" onClick={handleProposeMotto}>Propose</button>
+                </div>
               </div>
             )}
+            <div className="proposals-container" style={{ marginTop: '0.75rem' }}>
+              {mottoProposals.length === 0 ? (
+                <p className="no-proposals-text">No motto proposals yet.</p>
+              ) : (
+                mottoProposals.map((p) => {
+                  const isMine = myMottoVoteProposalId === p.id;
+                  return (
+                    <div key={p.id} className="proposal-item">
+                      <span>{p.text}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="vote-count">{p.vote_count || 0}</span>
+                        {!p.is_finalized && p.active && (
+                          <>
+                            {isMine ? (
+                              <button className="vote-button" onClick={() => handleVoteMotto(null)}>Unvote</button>
+                            ) : (
+                              <button className="vote-button" onClick={() => handleVoteMotto(p.id)}>Vote</button>
+                            )}
+                            {currentUserMember?.is_leader && (
+                              <button className="choose-name-button" onClick={() => handleFinalizeMotto(p.id)}>Finalize</button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 
-        <h2 className="members-title">Party Members</h2>
+        <h2 className="members-title" style={{ marginTop: '1rem' }}>Party Members</h2>
         <div className="members-container">
           {members.map((member) => {
             if (member.adventurer_name) {
               return (
                 <div key={member.id} className="member-card">
-                  <h3 className="member-name">
-                    {member.first_name} {member.is_leader && '👑'}
-                    {member.is_npc && <span className="hireling-tag">(Hireling)</span>}
-                  </h3>
-                  <p className="adventurer-name">"{member.adventurer_name}"</p>
+                  <div className="member-card__header">
+                    <h3 className="member-name">
+                      {member.first_name}
+                      {member.is_leader && (
+                        <span className="icon" role="img" aria-label="Party Leader" title="Party Leader">👑</span>
+                      )}
+                      {member.is_npc && (
+                        <span className="icon" role="img" aria-label="Hireling" title="Hireling">🛡️</span>
+                      )}
+                    </h3>
+                    <div className="member-meta">
+                      <div className="member-exp-badge">EXP {typeof (member as any).exp === 'number' ? (member as any).exp : 0}</div>
+                    </div>
+                  </div>
+                  <div className="member-card__body">
+                    <div className="member-adventureline">
+                      <p className="adventurer-name">"{member.adventurer_name}"</p>
+                    </div>
+                  </div>
                 </div>
               );
             }
@@ -417,69 +588,133 @@ export default function PartyLobbyPage() {
             return (
               <div key={member.id} className="member-card">
                 <h3 className="member-name">
-                  {member.first_name} {member.is_leader && '👑'} - Needs a Name!
+                  {member.first_name}{' '}
+                  {member.is_leader && (
+                    <span className="icon" role="img" aria-label="Party Leader" title="Party Leader">👑</span>
+                  )}
+                  {member.is_npc && (
+                    <span className="icon" role="img" aria-label="Hireling" title="Hireling">🛡️</span>
+                  )}
+                </h3>
+                <div className="member-subline">
+                  <span className="needs-name-text">Needs a Hero Name</span>
+                  <button
+                    className="name-panel-toggle"
+                    aria-label="Toggle name voting"
+                    title="Toggle name voting"
+                    onClick={() => {
+                      setOpenNamePanels((prev) => ({ ...prev, [member.id]: !prev[member.id] }));
+                    }}
+                  >
+                    🏷️
+                  </button>
                   {!member.is_npc && currentUserMember?.id !== member.id && (
-                    <div className="member-options">
-                      <button className="options-icon" onClick={() => setShowVoteMenu(member.id)}>⋮</button>
-                      {showVoteMenu === member.id && (
-                        <div className="vote-menu">
-                          <button onClick={() => handleVoteToMakeHireling(member.id)}>Vote to make Hireling</button>
-                        </div>
-                      )}
+                    <div className="member-options" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <button
+                        className="options-icon"
+                        aria-label="Toggle hireling voting"
+                        title="Toggle hireling voting"
+                        onClick={() => {
+                          setOpenHirelingPanels((prev) => ({ ...prev, [member.id]: !prev[member.id] }));
+                        }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                      </button>
                     </div>
                   )}
-                  {member.is_npc && <span className="hireling-tag">(Hireling)</span>}
-                </h3>
-                
+                </div>
+
                 {/* Display hireling vote status (hidden once member becomes NPC) */}
-                {!member.is_npc && eligibleHirelingVoterCounts[member.id] > 0 && (
-                  <p className="hireling-vote-status">
-                    Hireling Vote: {hirelingVoteCounts[member.id] || 0}/{eligibleHirelingVoterCounts[member.id]}
-                  </p>
-                )}
-                
-                {isTie && canBreakTie && (
-                  <div className="tie-breaker-card">
-                    <h4 className="tie-breaker-title">Tie-breaker!</h4>
-                    <p className="tie-breaker-text">As the one being named (or Party Leader), you must choose the final name.</p>
-                    <div className="tie-breaker-buttons">
-                      {tieProposals.map(p => (
-                        <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="choose-name-button">
-                          Choose "{p.proposed_name}"
-                        </button>
-                      ))}
+                {!member.is_npc && eligibleHirelingVoterCounts[member.id] > 0 && openHirelingPanels[member.id] && (
+                  <div className="member-section">
+                    <div className="proposals-container">
+                      <div className="proposal-item proposal-item--dotted">
+                        <span>Hireling Vote</span>
+                        <div className="flex items-center gap-3">
+                          {(hirelingVoteCounts[member.id] || 0) > 0 && (
+                            <span className="vote-count">
+                              {hirelingVoteCounts[member.id] || 0}/{eligibleHirelingVoterCounts[member.id]}
+                            </span>
+                          )}
+                          {currentUserMember?.id !== member.id && (
+                            <button onClick={() => handleVoteToMakeHireling(member.id)} className="vote-button">
+                              Vote
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                <div className="proposals-container">
-                  {memberProposals.map(p => (
-                    <div key={p.id} className="proposal-item">
-                      <span>{p.proposed_name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="vote-count">{voteCounts[p.id] || 0}</span>
-                        {canVote && (
-                          <button onClick={() => handleCastVote(p.id)} className="vote-button">Vote</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {memberProposals.length === 0 && <p className="no-proposals-text">No names proposed yet.</p>}
+                {/* Always show EXP, defaulting to 0 if missing */}
+                <div className="member-exp-badge" style={{ marginTop: '0.25rem', fontSize: '0.9rem' }}>
+                  EXP {typeof (member as any).exp === 'number' ? (member as any).exp : 0}
                 </div>
-                {/* TODO: Implement real-time vote status display for hireling conversion */}
 
-                {currentUserMember && currentUserMember.id !== member.id && (
-                  <div className="propose-name-container">
-                    <input
-                      type="text"
-                      value={nameProposalInput[member.id] || ''}
-                      onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
-                      placeholder="Propose a name..."
-                      className="propose-name-input"
-                    />
-                    <button onClick={() => handleProposeName(member.id)} className="propose-name-button">
-                      Propose
-                    </button>
+                {/* Collapsible name voting/proposal area */}
+                {openNamePanels[member.id] && (
+                  <div className="name-panel">
+                    {isTie && canBreakTie && (
+                      <div className="tie-breaker-card">
+                        <h4 className="tie-breaker-title">Tie-breaker!</h4>
+                        <p className="tie-breaker-text">As the one being named (or Party Leader), you must choose the final name.</p>
+                        <div className="tie-breaker-buttons">
+                          {tieProposals.map(p => (
+                            <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="choose-name-button">
+                              Choose "{p.proposed_name}"
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="proposals-container">
+                      {memberProposals.map(p => (
+                        <div key={p.id} className="proposal-item">
+                          <span>{p.proposed_name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="vote-count">{voteCounts[p.id] || 0}</span>
+                            {canVote && (
+                              <button onClick={() => handleCastVote(p.id)} className="vote-button">Vote</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {memberProposals.length === 0 && <p className="no-proposals-text">No names proposed yet.</p>}
+                    </div>
+
+                    {currentUserMember && currentUserMember.id !== member.id && (
+                      <div className="propose-name-container">
+                        <input
+                          type="text"
+                          value={nameProposalInput[member.id] || ''}
+                          onChange={(e) => setNameProposalInput(prev => ({ ...prev, [member.id]: e.target.value }))}
+                          placeholder="Propose a name..."
+                          className="propose-name-input"
+                        />
+                        <button onClick={() => handleProposeName(member.id)} className="propose-name-button">
+                          Propose
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

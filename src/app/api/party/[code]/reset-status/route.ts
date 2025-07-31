@@ -52,9 +52,12 @@ export async function POST(
     if (memberIds.length > 0) {
       await supabase.from('answers').delete().in('voter_member_id', memberIds);
       await supabase.from('name_proposal_votes').delete().in('voter_member_id', memberIds);
+      // Clear motto votes cast by these members (via voter_member_id)
+      await supabase.from('party_motto_votes').delete().in('voter_member_id', memberIds);
     }
     
     await supabase.from('name_proposals').delete().eq('party_id', partyId);
+    // Delete motto proposals (cascades will also remove votes if any remain)
     await supabase.from('party_motto_proposals').delete().eq('party_id', partyId);
     await supabase.from('peer_assessment_assignments').delete().eq('party_id', partyId);
 
