@@ -48,56 +48,13 @@ export async function GET(
     meMemberId = meMember.id;
   }
 
-  // List proposals in this party (active first), support both legacy and new schemas
-  // We select a superset with aliases so the rest of the handler can stay consistent.
-  // Try new-schema columns first (2025 migration)
-  let proposals: any[] | null = null;
-  let propErr: any = null;
-
-  const tryNew = async () => {
-    const res = await supabase
-      .from('party_motto_proposals')
-      .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
-      .eq('party_id', party.id)
-      .order('active', { ascending: false })
-      .order('created_at', { ascending: true });
-    return res;
-  };
-
-  const tryLegacy = async () => {
-    const res = await supabase
-      .from('party_motto_proposals')
-      .select('id, party_id, proposing_member_id, proposed_motto, votes, created_at')
-      .eq('party_id', party.id)
-      .order('created_at', { ascending: true });
-    return res;
-  };
-
-  {
-    const resNew = await tryNew();
-    if (!resNew.error) {
-      proposals = resNew.data ?? [];
-      propErr = null;
-    } else {
-      // Only fallback on unknown column errors
-      const isUnknownCol = resNew.error.code === '42703';
-      if (isUnknownCol) {
-        const resLegacy = await tryLegacy();
-        proposals = resLegacy.data ?? [];
-        // If legacy selection itself 42703s (mixed environments), don't hard fail; treat as empty.
-        if (resLegacy.error && resLegacy.error.code === '42703') {
-          console.error('mottos GET legacy fallback also missing columns; treating as empty. fallback error:', resLegacy.error);
-          propErr = null;
-          proposals = [];
-        } else {
-          propErr = resLegacy.error;
-        }
-      } else {
-        proposals = null;
-        propErr = resNew.error;
-      }
-    }
-  }
+  // List proposals in this party (active first) using ONLY normalized columns
+  const { data: proposals, error: propErr } = await supabase
+    .from('party_motto_proposals')
+    .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
+    .eq('party_id', party.id)
+    .order('active', { ascending: false })
+    .order('created_at', { ascending: true });
 
   if (propErr) {
     console.error('mottos GET proposals error:', propErr);
@@ -146,15 +103,13 @@ export async function GET(
   const normalized = (proposals ?? []).map((p: any) => ({
     id: p.id,
     party_id: p.party_id,
-    proposed_by_member_id: p.proposed_by_member_id ?? p.proposing_member_id ?? null,
-    text: p.text ?? p.proposed_motto ?? '',
-    vote_count: typeof p.vote_count === 'number' ? p.vote_count : (typeof p.votes === 'number' ? p.votes : 0),
-    // In legacy schema these columns don't exist; default to not finalized and active
-    is_finalized: !!(p.is_finalized ?? false),
-    active: !!(p.active ?? true),
+    proposed_by_member_id: p.proposed_by_member_id,
+    text: p.text,
+    vote_count: typeof p.vote_count === 'number' ? p.vote_count : 0,
+    is_finalized: !!p.is_finalized,
+    active: !!p.active,
     created_at: p.created_at
   }))
-  // Keep active first, then by created_at asc even for legacy-normalized rows
   .sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();

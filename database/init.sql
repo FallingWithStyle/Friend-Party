@@ -162,20 +162,39 @@ COMMENT ON COLUMN public.name_proposal_votes.voter_member_id IS 'The party membe
 CREATE TABLE IF NOT EXISTS public.party_motto_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID REFERENCES public.parties(id) ON DELETE CASCADE NOT NULL,
-    -- Legacy column retained for compatibility (backend normalizes)
-    proposing_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
-    -- New columns are added via migrations; legacy columns remain for fallback
-    proposed_motto TEXT NOT NULL,
-    votes INT DEFAULT 0 NOT NULL,
+    proposed_by_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
+    "text" TEXT NOT NULL,
+    vote_count INTEGER NOT NULL DEFAULT 0,
+    is_finalized BOOLEAN NOT NULL DEFAULT FALSE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
-COMMENT ON TABLE public.party_motto_proposals IS 'Stores proposed mottos for the party.';
--- Votes table for party motto proposals (new)
+COMMENT ON TABLE public.party_motto_proposals IS 'Motto proposals for a party along with aggregated vote_count and finalization flags.';
+COMMENT ON COLUMN public.party_motto_proposals.text IS 'The proposed motto text.';
+COMMENT ON COLUMN public.party_motto_proposals.vote_count IS 'Cached count of votes, maintained via triggers.';
+COMMENT ON COLUMN public.party_motto_proposals.is_finalized IS 'True if this proposal was chosen as the final party motto.';
+COMMENT ON COLUMN public.party_motto_proposals.active IS 'False if proposals are closed; used to disable further voting when finalized.';
+
+-- Helpful uniqueness to avoid duplicate identical proposals by same member while active
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'unique_active_motto_text_per_party'
+  ) THEN
+    ALTER TABLE public.party_motto_proposals
+      ADD CONSTRAINT unique_active_motto_text_per_party
+      UNIQUE (party_id, "text", active);
+  END IF;
+END$$;
+
+-- Votes table for party motto proposals (normalized)
 CREATE TABLE IF NOT EXISTS public.party_motto_votes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     proposal_id UUID REFERENCES public.party_motto_proposals(id) ON DELETE CASCADE NOT NULL,
     voter_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (proposal_id, voter_member_id)
 );
 COMMENT ON TABLE public.party_motto_votes IS 'Tracks votes for proposed party mottos.';
@@ -306,13 +325,7 @@ ALTER TABLE public.answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.party_motto_proposals ENABLE ROW LEVEL SECURITY;
--- Enable RLS on party_motto_votes only if it exists
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='party_motto_votes') THEN
-    EXECUTE 'ALTER TABLE public.party_motto_votes ENABLE ROW LEVEL SECURITY';
-  END IF;
-END $$;
+ALTER TABLE public.party_motto_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.peer_assessment_assignMENTS ENABLE ROW LEVEL SECURITY;
 
@@ -353,16 +366,17 @@ CREATE POLICY "Allow members to cast votes in their party" ON public.name_propos
 -- Policies for public.party_motto_proposals
 DROP POLICY IF EXISTS "Allow members to see motto proposals in their party" ON public.party_motto_proposals;
 CREATE POLICY "Allow members to see motto proposals in their party" ON public.party_motto_proposals
-FOR SELECT USING (is_party_member(party_id, auth.uid()));
+FOR SELECT TO authenticated USING (
+  is_party_member(party_id, auth.uid())
+);
 
--- Make INSERT resilient to legacy/new proposer column drift without referencing missing columns
 DROP POLICY IF EXISTS "Allow members to insert motto proposals in their party" ON public.party_motto_proposals;
 CREATE POLICY "Allow members to insert motto proposals in their party" ON public.party_motto_proposals
-FOR INSERT WITH CHECK (
+FOR INSERT TO authenticated WITH CHECK (
   EXISTS (
     SELECT 1
     FROM public.party_members pm
-    WHERE pm.id = public.party_motto_proposals.proposing_member_id
+    WHERE pm.id = public.party_motto_proposals.proposed_by_member_id
       AND pm.party_id = public.party_motto_proposals.party_id
       AND pm.user_id = auth.uid()
   )
@@ -389,71 +403,63 @@ WITH CHECK (
 );
 
 -- Policies for public.party_motto_votes (create only if table exists)
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='party_motto_votes') THEN
-    EXECUTE '
-      DROP POLICY IF EXISTS "pm_motto_votes_select" ON public.party_motto_votes;
-      CREATE POLICY "pm_motto_votes_select" ON public.party_motto_votes
-      FOR SELECT USING (
-        EXISTS (
-          SELECT 1
-          FROM public.party_motto_proposals p
-          JOIN public.party_members me ON me.party_id = p.party_id
-          WHERE public.party_motto_votes.proposal_id = p.id
-            AND me.user_id = auth.uid()
-        )
-      )';
+-- Votes RLS (normalized)
+DROP POLICY IF EXISTS "pm_motto_votes_select" ON public.party_motto_votes;
+CREATE POLICY "pm_motto_votes_select" ON public.party_motto_votes
+FOR SELECT TO authenticated USING (
+  EXISTS (
+    SELECT 1
+    FROM public.party_motto_proposals p
+    JOIN public.party_members me ON me.party_id = p.party_id
+    WHERE public.party_motto_votes.proposal_id = p.id
+      AND me.user_id = auth.uid()
+  )
+);
 
-    EXECUTE '
-      DROP POLICY IF EXISTS "pm_motto_votes_insert" ON public.party_motto_votes;
-      CREATE POLICY "pm_motto_votes_insert" ON public.party_motto_votes
-      FOR INSERT WITH CHECK (
-        EXISTS (
-          SELECT 1
-          FROM public.party_motto_proposals p
-          JOIN public.party_members me ON me.party_id = p.party_id
-          WHERE public.party_motto_votes.proposal_id = p.id
-            AND public.party_motto_votes.voter_member_id = me.id
-            AND me.user_id = auth.uid()
-        )
-      )';
+DROP POLICY IF EXISTS "pm_motto_votes_insert" ON public.party_motto_votes;
+CREATE POLICY "pm_motto_votes_insert" ON public.party_motto_votes
+FOR INSERT TO authenticated WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.party_motto_proposals p
+    JOIN public.party_members me ON me.party_id = p.party_id
+    WHERE public.party_motto_votes.proposal_id = p.id
+      AND public.party_motto_votes.voter_member_id = me.id
+      AND me.user_id = auth.uid()
+  )
+);
 
-    EXECUTE '
-      DROP POLICY IF EXISTS "pm_motto_votes_update" ON public.party_motto_votes;
-      CREATE POLICY "pm_motto_votes_update" ON public.party_motto_votes
-      FOR UPDATE USING (
-        EXISTS (
-          SELECT 1
-          FROM public.party_motto_votes v
-          JOIN public.party_members me ON me.id = v.voter_member_id
-          WHERE v.id = public.party_motto_votes.id
-            AND me.user_id = auth.uid()
-        )
-      )
-      WITH CHECK (
-        EXISTS (
-          SELECT 1
-          FROM public.party_motto_proposals p_new
-          JOIN public.party_members me ON me.party_id = p_new.party_id
-          WHERE public.party_motto_votes.proposal_id = p_new.id
-            AND public.party_motto_votes.voter_member_id = me.id
-            AND me.user_id = auth.uid()
-        )
-      )';
+DROP POLICY IF EXISTS "pm_motto_votes_update" ON public.party_motto_votes;
+CREATE POLICY "pm_motto_votes_update" ON public.party_motto_votes
+FOR UPDATE TO authenticated USING (
+  EXISTS (
+    SELECT 1
+    FROM public.party_motto_votes v
+    JOIN public.party_members me ON me.id = v.voter_member_id
+    WHERE v.id = public.party_motto_votes.id
+      AND me.user_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.party_motto_proposals p_new
+    JOIN public.party_members me ON me.party_id = p_new.party_id
+    WHERE public.party_motto_votes.proposal_id = p_new.id
+      AND public.party_motto_votes.voter_member_id = me.id
+      AND me.user_id = auth.uid()
+  )
+);
 
-    EXECUTE '
-      DROP POLICY IF EXISTS "pm_motto_votes_delete" ON public.party_motto_votes;
-      CREATE POLICY "pm_motto_votes_delete" ON public.party_motto_votes
-      FOR DELETE USING (
-        EXISTS (
-          SELECT 1 FROM public.party_members me
-          WHERE me.id = public.party_motto_votes.voter_member_id
-            AND me.user_id = auth.uid()
-        )
-      )';
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "pm_motto_votes_delete" ON public.party_motto_votes;
+CREATE POLICY "pm_motto_votes_delete" ON public.party_motto_votes
+FOR DELETE TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.party_members me
+    WHERE me.id = public.party_motto_votes.voter_member_id
+      AND me.user_id = auth.uid()
+  )
+);
 
 -- Policies for public.peer_assessment_assignments
 CREATE POLICY "Allow members to see their own assessment assignments" ON public.peer_assessment_assignments FOR SELECT TO authenticated USING (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));
@@ -505,14 +511,14 @@ BEGIN
     -- Seed leader-proposed motto for DEBUG1 (idempotent; remove nested DO usage)
     PERFORM 1 FROM public.party_motto_proposals pmp
     WHERE pmp.party_id = debug_party_id
-      AND pmp.proposing_member_id = (
+      AND pmp.proposed_by_member_id = (
         SELECT pm.id FROM public.party_members pm
         WHERE pm.party_id = debug_party_id AND pm.is_leader = TRUE
         ORDER BY pm.created_at LIMIT 1
       );
 
     IF NOT FOUND THEN
-      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
       SELECT p.id, pm.id, p.motto
       FROM public.parties p
       JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
@@ -525,14 +531,14 @@ BEGIN
     -- Seed leader-proposed motto for DEBUG1 (idempotent; no nested DO scope)
     PERFORM 1 FROM public.party_motto_proposals pmp
     WHERE pmp.party_id = debug_party_id
-      AND pmp.proposing_member_id = (
+      AND pmp.proposed_by_member_id = (
         SELECT pm.id FROM public.party_members pm
         WHERE pm.party_id = debug_party_id AND pm.is_leader = TRUE
         ORDER BY pm.created_at LIMIT 1
       );
 
     IF NOT FOUND THEN
-      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
       SELECT debug_party_id, pm.id, p.motto
       FROM public.parties p
       JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
@@ -545,11 +551,11 @@ BEGIN
     -- Leader motto proposal seed for DEBUG1 (idempotent)
     IF debug_party_id IS NOT NULL THEN
       PERFORM 1 FROM public.party_motto_proposals
-      WHERE party_id = debug_party_id AND proposing_member_id IN (
+      WHERE party_id = debug_party_id AND proposed_by_member_id IN (
         SELECT id FROM public.party_members WHERE party_id = debug_party_id AND is_leader = TRUE LIMIT 1
       );
       IF NOT FOUND THEN
-        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
         SELECT debug_party_id, pm.id, p.motto
         FROM public.parties p
         JOIN public.party_members pm ON pm.party_id = p.id AND pm.is_leader = TRUE
@@ -572,16 +578,16 @@ BEGIN
       ORDER BY created_at LIMIT 1;
 
       IF v_leader_id IS NOT NULL AND
-         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposing_member_id = v_leader_id) = 0 THEN
+         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposed_by_member_id = v_leader_id) = 0 THEN
 
         SELECT EXISTS(
           SELECT 1 FROM public.party_motto_proposals
           WHERE party_id = debug_party_id
-            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = debug_party_id)
+            AND "text" = (SELECT motto FROM public.parties WHERE id = debug_party_id)
         ) INTO v_exists;
 
         IF NOT v_exists THEN
-          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
           SELECT debug_party_id, v_leader_id, motto
           FROM public.parties
           WHERE id = debug_party_id
@@ -602,15 +608,15 @@ BEGIN
       ORDER BY created_at LIMIT 1;
 
       IF v_leader_id IS NOT NULL AND
-         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposing_member_id = v_leader_id) = 0 THEN
+         (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = debug_party_id AND proposed_by_member_id = v_leader_id) = 0 THEN
         SELECT EXISTS(
           SELECT 1 FROM public.party_motto_proposals
           WHERE party_id = debug_party_id
-            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = debug_party_id)
+            AND "text" = (SELECT motto FROM public.parties WHERE id = debug_party_id)
         ) INTO v_exists;
 
         IF NOT v_exists THEN
-          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
           SELECT debug_party_id, v_leader_id, motto
           FROM public.parties
           WHERE id = debug_party_id
@@ -747,10 +753,10 @@ BEGIN
 
     -- Seed leader-proposed motto as their single proposal if not already present (Fellowship)
     PERFORM 1 FROM public.party_motto_proposals
-    WHERE party_id = fellowship_party_id AND proposing_member_id = patrick_member_id;
+    WHERE party_id = fellowship_party_id AND proposed_by_member_id = patrick_member_id;
 
     IF NOT FOUND THEN
-      INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+      INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
       SELECT fellowship_party_id, patrick_member_id, motto
       FROM public.parties
       WHERE id = fellowship_party_id
@@ -763,15 +769,15 @@ BEGIN
     DECLARE
       v_exists BOOLEAN;
     BEGIN
-      IF (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = fellowship_party_id AND proposing_member_id = patrick_member_id) = 0 THEN
+      IF (SELECT COUNT(1) FROM public.party_motto_proposals WHERE party_id = fellowship_party_id AND proposed_by_member_id = patrick_member_id) = 0 THEN
         SELECT EXISTS(
           SELECT 1 FROM public.party_motto_proposals
           WHERE party_id = fellowship_party_id
-            AND proposed_motto = (SELECT motto FROM public.parties WHERE id = fellowship_party_id)
+            AND "text" = (SELECT motto FROM public.parties WHERE id = fellowship_party_id)
         ) INTO v_exists;
 
         IF NOT v_exists THEN
-          INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+          INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
           SELECT fellowship_party_id, patrick_member_id, motto
           FROM public.parties
           WHERE id = fellowship_party_id
@@ -1025,10 +1031,10 @@ BEGIN
     -- Leader's initial motto counts as their single proposal
     IF leader_member_id IS NOT NULL THEN
       PERFORM 1 FROM public.party_motto_proposals
-      WHERE party_id = hardy_party_id AND proposing_member_id = leader_member_id;
+      WHERE party_id = hardy_party_id AND proposed_by_member_id = leader_member_id;
 
       IF NOT FOUND THEN
-        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
         SELECT hardy_party_id, leader_member_id, motto
         FROM public.parties
         WHERE id = hardy_party_id
@@ -1102,10 +1108,10 @@ BEGIN
     -- Leader's initial motto counts as their single proposal (if not already present)
     IF leader_member_id IS NOT NULL THEN
       PERFORM 1 FROM public.party_motto_proposals
-      WHERE party_id = hardy_party_id AND proposing_member_id = leader_member_id;
+      WHERE party_id = hardy_party_id AND proposed_by_member_id = leader_member_id;
 
       IF NOT FOUND THEN
-        INSERT INTO public.party_motto_proposals (party_id, proposing_member_id, proposed_motto)
+        INSERT INTO public.party_motto_proposals (party_id, proposed_by_member_id, "text")
         SELECT hardy_party_id, leader_member_id, motto
         FROM public.parties
         WHERE id = hardy_party_id

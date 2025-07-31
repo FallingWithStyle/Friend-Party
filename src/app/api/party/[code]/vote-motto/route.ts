@@ -4,7 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 // POST /api/party/[code]/vote-motto
 // body: { proposal_id: string | null, proposal_text?: string }
 // - proposal_id null -> unvote
-// - When proposal_id is provided but might be stale/optimistic, proposal_text is used to resolve to canonical id.
+// - proposal_text supported only for normalized column "text"
 export async function POST(
   request: Request,
   context: { params: Promise<{ code: string }> } | { params: { code: string } }
@@ -12,7 +12,6 @@ export async function POST(
   const supabase = await createClient();
   const body = await request.json().catch(() => ({}));
   const proposalId = body?.proposal_id ?? null;
-  // Single normalized proposal_text
   const proposalTextFromBody: string | null =
     typeof body?.proposal_text === 'string' && body.proposal_text.trim().length > 0
       ? body.proposal_text.trim()
@@ -51,89 +50,40 @@ export async function POST(
     return NextResponse.json({ error: 'Not a member of this party' }, { status: 403 });
   }
 
-  // If proposalId provided, validate it belongs to this party and is active.
-  // If not found by id (legacy/new schema drift or optimistic id), or when id is absent, attempt resolution by exact text match in party.
+  // Use normalized columns only
   let resolvedProposalId: string | null = null;
 
-  // Normalized fetch by id that tolerates legacy schema (missing columns) and RLS aliasing.
   const fetchProposalNormalized = async (id: string) => {
-    // Try new columns first
-    const resNew = await supabase
+    const res = await supabase
       .from('party_motto_proposals')
       .select('id, party_id, text, active, is_finalized')
       .eq('id', id)
       .maybeSingle();
 
-    if (!resNew.error && resNew.data) {
-      const p = resNew.data as any;
-      return {
-        id: p.id,
-        party_id: p.party_id,
-        text: p.text ?? null,
-        active: p.active ?? true,
-        is_finalized: !!p.is_finalized,
-      };
-    }
-    // If error is unknown column, try legacy columns
-    if (resNew.error && resNew.error.code === '42703') {
-      const resLegacy = await supabase
-        .from('party_motto_proposals')
-        .select('id, party_id, proposed_motto, votes, created_at')
-        .eq('id', id)
-        .maybeSingle();
-      if (!resLegacy.error && resLegacy.data) {
-        const p = resLegacy.data as any;
-        return {
-          id: p.id,
-          party_id: p.party_id,
-          text: p.proposed_motto ?? null,
-          // Legacy schema had no active/is_finalized; assume active and not finalized
-          active: true,
-          is_finalized: false,
-        };
-      }
-      // fallthrough to return null on other legacy errors
-    }
-    return null;
+    if (res.error || !res.data) return null;
+    const p = res.data as any;
+    return {
+      id: p.id,
+      party_id: p.party_id,
+      text: p.text as string,
+      active: !!p.active,
+      is_finalized: !!p.is_finalized,
+    };
   };
 
   const resolveByText = async (text: string | null) => {
     if (!text) return null;
-    // Try new schema text column
-    const byTextNew = await supabase
+    const byText = await supabase
       .from('party_motto_proposals')
       .select('id, active, is_finalized')
       .eq('party_id', party.id)
       .eq('text', text)
       .limit(1)
       .maybeSingle();
-    let chosen: any = (!byTextNew.error && byTextNew.data) ? byTextNew.data : null;
 
-    if (!chosen) {
-      // Try legacy column proposed_motto
-      const byTextLegacy = await supabase
-        .from('party_motto_proposals')
-        .select('id')
-        .eq('party_id', party.id)
-        .eq('proposed_motto', text)
-        .limit(1)
-        .maybeSingle();
-      if (!byTextLegacy.error && byTextLegacy.data) {
-        // Re-fetch normalized by id to get active/final flags tolerantly
-        const norm = await fetchProposalNormalized(byTextLegacy.data.id);
-        if (!norm) return null;
-        if (!norm.active || norm.is_finalized) return 'CLOSED';
-        return norm.id as string;
-      }
-    } else {
-      // Validate chosen using tolerant fetch to avoid column-drift issues
-      const norm = await fetchProposalNormalized(chosen.id);
-      if (!norm) return null;
-      if (!norm.active || norm.is_finalized) return 'CLOSED';
-      return norm.id as string;
-    }
-
-    return null;
+    if (byText.error || !byText.data) return null;
+    if (!byText.data.active || byText.data.is_finalized) return 'CLOSED';
+    return byText.data.id as string;
   };
 
   if (proposalId) {
@@ -192,27 +142,9 @@ export async function POST(
       .select('id, text, vote_count, active, is_finalized')
       .eq('party_id', party.id)
       .eq('active', true);
-
+  
     if (!resNew.error && Array.isArray(resNew.data)) {
       proposals = resNew.data;
-    } else if (resNew.error && resNew.error.code === '42703') {
-      // Legacy columns path
-      const resLegacy = await supabase
-        .from('party_motto_proposals')
-        .select('id, proposed_motto, votes, party_id')
-        .eq('party_id', party.id);
-      if (!resLegacy.error && Array.isArray(resLegacy.data)) {
-        proposals = resLegacy.data.map((p: any) => ({
-          id: p.id,
-          text: p.proposed_motto ?? null,
-          vote_count: typeof p.votes === 'number' ? p.votes : 0,
-          active: true,
-          is_finalized: false,
-          party_id: p.party_id,
-        }));
-      } else {
-        return;
-      }
     } else {
       return;
     }

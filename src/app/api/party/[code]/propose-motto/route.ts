@@ -58,63 +58,23 @@ export async function POST(
       return NextResponse.json({ error: 'Not a member of this party' }, { status: 403 });
     }
 
-    // Insert proposal
-    // Support both legacy (init.sql) and new (migration) schemas by attempting new columns first,
-    // then falling back to legacy column names if PostgREST reports missing-column (PGRST204)
-    const tryNew = async () => {
-      return await supabase
-        .from('party_motto_proposals')
-        .insert({
-          party_id: party.id,
-          proposed_by_member_id: meMember.id,
-          text,
-        })
-        .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
-        .single();
-    };
-  
-    const tryLegacy = async () => {
-      return await supabase
-        .from('party_motto_proposals')
-        .insert({
-          party_id: party.id,
-          proposing_member_id: meMember.id,
-          proposed_motto: text,
-        })
-        .select('id, party_id, proposing_member_id, proposed_motto, votes, created_at')
-        .single();
-    };
-  
-    let proposal: any = null;
-    let insErr: any = null;
-  
-    let res = await tryNew();
-    proposal = res.data;
-    insErr = res.error;
-  
-    if (insErr && insErr.code === 'PGRST204') {
-      // Column missing in schema cache -> fallback to legacy schema
-      const resLegacy = await tryLegacy();
-      proposal = resLegacy.data
-        ? {
-            id: resLegacy.data.id,
-            party_id: resLegacy.data.party_id,
-            proposed_by_member_id: resLegacy.data.proposing_member_id,
-            text: resLegacy.data.proposed_motto,
-            vote_count: resLegacy.data.votes ?? 0,
-            is_finalized: false,
-            active: true,
-            created_at: resLegacy.data.created_at,
-          }
-        : null;
-      insErr = resLegacy.error;
-    }
+    // Insert proposal using normalized columns only
+    const { data: inserted, error: insErr } = await supabase
+      .from('party_motto_proposals')
+      .insert({
+        party_id: party.id,
+        proposed_by_member_id: meMember.id,
+        text,
+      })
+      .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
+      .single();
 
     if (insErr) {
-      // Surface details to logs to diagnose 500s while keeping response minimal
       console.error('propose-motto insert error:', insErr);
       return NextResponse.json({ error: 'Failed to propose motto' }, { status: 500 });
     }
+
+    const proposal = inserted;
 
     return NextResponse.json({ proposal }, { status: 201 });
   } catch (e) {
