@@ -944,7 +944,19 @@ export default function PartyLobbyPage() {
                   )}
                 </h3>
                 <div className="member-subline">
-                  <span className="needs-name-text">Needs a Hero Name</span>
+                  {/* Status badge */}
+                  <span
+                    className={`status-badge status-${(member.status || '').toLowerCase()}`}
+                    title={`Status: ${member.status || 'Unknown'}`}
+                  >
+                    {member.status || 'Unknown'}
+                  </span>
+
+                  {/* Needs-name indicator if not yet named */}
+                  {!member.adventurer_name && (
+                    <span className="needs-name-text">Needs a Hero Name</span>
+                  )}
+
                   <button
                     className="party-motto-vote-btn party-motto-vote-btn--red"
                     aria-label="Name voting"
