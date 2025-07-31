@@ -173,6 +173,32 @@ export default function PartyLobbyPage() {
      return () => {
        supabase.removeChannel(channel);
      };
+  // Subscribe to party status to auto-navigate to results when ready
+  useEffect(() => {
+    if (!party) return;
+    const channel = supabase
+      .channel(`party-status-${party.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'parties',
+          filter: `id=eq.${party.id}`,
+        },
+        (payload: any) => {
+          const newStatus = payload?.new?.status;
+          if (newStatus === 'Results' || newStatus === 'ResultsReady') {
+            router.push(`/party/${code}/results`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [party, supabase, router, code]);
    }, [party, supabase]); // Removed members from dependencies to avoid re-subscription issues with filter
  
    // Expose the memoized map directly for rendering

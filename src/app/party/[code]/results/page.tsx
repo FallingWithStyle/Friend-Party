@@ -296,31 +296,67 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
   }
 
 
+  // Determine read-only public mode via query param
+  const isBrowser = typeof window !== 'undefined';
+  const paramsObj = isBrowser ? new URLSearchParams(window.location.search) : null;
+  const isPublicView = !!(paramsObj && paramsObj.get('view') === 'public');
+
+  const handleCopyShareLink = () => {
+    if (!isBrowser) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'public');
+    const shareUrl = url.toString();
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      alert('Public results link copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy link. Please copy manually: ' + shareUrl);
+    });
+  };
+
   return (
     <div className="results-container">
       <h1 className="results-title">Party Results</h1>
+
+      {/* Share section at top for visibility */}
+      <div className="share-results-section" style={{ marginBottom: '1rem' }}>
+        <button onClick={handleCopyShareLink} className="share-button">
+          Copy Public Results Link
+        </button>
+        {isPublicView && (
+          <span style={{ marginLeft: '0.75rem', fontStyle: 'italic' }}>
+            Public, read-only view
+          </span>
+        )}
+      </div>
+
       <div className="results-grid">
         {partyMembers.map((member) => (
           <div key={member.id} className="member-results-card">
-            <h2 className="member-name">{member.first_name}</h2>
-            <p><strong className="member-class">Class:</strong> {member.class}</p>
-            <ul className="stats-list">
-              <li><strong>Strength:</strong> {member.strength}</li>
-              <li><strong>Dexterity:</strong> {member.dexterity}</li>
-              <li><strong>Charisma:</strong> {member.charisma}</li>
-              <li><strong>Intelligence:</strong> {member.intelligence}</li>
-              <li><strong>Wisdom:</strong> {member.wisdom}</li>
-              <li><strong>Constitution:</strong> {member.constitution}</li>
-              {member.exp !== undefined && <li><strong>EXP:</strong> {member.exp}</li>}
-            </ul>
+            <div className="member-card-header">
+              <h2 className="member-name">{member.first_name}</h2>
+              <div className="member-badges">
+                {member.class && <span className="member-class-badge">{member.class}</span>}
+                {typeof member.exp === 'number' && (
+                  <span className="member-exp-badge">EXP {member.exp}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="stats-list stats-grid">
+              <div className="stat"><strong>STR</strong><span>{member.strength}</span></div>
+              <div className="stat"><strong>DEX</strong><span>{member.dexterity}</span></div>
+              <div className="stat"><strong>CHA</strong><span>{member.charisma}</span></div>
+              <div className="stat"><strong>INT</strong><span>{member.intelligence}</span></div>
+              <div className="stat"><strong>WIS</strong><span>{member.wisdom}</span></div>
+              <div className="stat"><strong>CON</strong><span>{member.constitution}</span></div>
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Secondary share button at bottom */}
       <div className="share-results-section">
-        <button onClick={() => {
-          navigator.clipboard.writeText(window.location.href);
-          alert('Link copied to clipboard!');
-        }} className="share-button">
+        <button onClick={handleCopyShareLink} className="share-button">
           Share Results
         </button>
       </div>
