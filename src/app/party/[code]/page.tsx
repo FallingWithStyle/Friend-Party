@@ -66,6 +66,7 @@ export default function PartyLobbyPage() {
   const [myMottoVoteProposalId, setMyMottoVoteProposalId] = useState<string | null>(null);
   const [newMottoText, setNewMottoText] = useState('');
   const [showMottoPanel, setShowMottoPanel] = useState(false);
+  const [partyMorale, setPartyMorale] = useState<{ score: number | null; level: string | null }>({ score: null, level: null });
   // Track hireling votes as a stable count map keyed by target member id
   const [hirelingVoteCountsMap, setHirelingVoteCountsMap] = useState<{ [key: string]: number }>({});
   const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
@@ -140,6 +141,10 @@ export default function PartyLobbyPage() {
              id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
            })));
            setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+           setPartyMorale({
+             score: typeof json.moraleScore === 'number' ? json.moraleScore : (json.moraleScore ? Number(json.moraleScore) : null),
+             level: typeof json.moraleLevel === 'string' ? json.moraleLevel : null
+           });
            // stash leader proposal id for UI pinning
            (window as any).__leaderProposalId = json.leaderProposalId ?? null;
          } else if (resp.status === 401 || resp.status === 403) {
@@ -791,6 +796,17 @@ export default function PartyLobbyPage() {
             🏛️
           </button>
         </div>
+        {partyMorale.level ? (
+          <div
+            className={`morale-banner morale-${partyMorale.level.toLowerCase()}`}
+            title={`Party Morale: ${partyMorale.level}${partyMorale.score != null ? ` (${partyMorale.score.toFixed(2)})` : ''}`}
+          >
+            Party Morale: <strong>{partyMorale.level}</strong>
+            {partyMorale.score != null ? (
+              <span className="morale-score">({partyMorale.score.toFixed(2)})</span>
+            ) : null}
+          </div>
+        ) : null}
         <p className="party-code">
           Party Code: <span className="party-code-span">{party.code}</span>
           <button

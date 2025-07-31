@@ -282,6 +282,63 @@ export async function POST(
     }
   };
 
+  // Persist Party Morale after voting/proposals/assessment changes
+  const updateMorale = async () => {
+    try {
+      // Members and completion
+      const { data: pmRows } = await supabase
+        .from('party_members')
+        .select('id, is_npc, assessment_status')
+        .eq('party_id', party.id);
+
+      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
+      const finished = nonNpc.filter(
+        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
+      );
+      const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
+
+      // Active proposals
+      const { data: activeProps } = await supabase
+        .from('party_motto_proposals')
+        .select('id, active')
+        .eq('party_id', party.id)
+        .eq('active', true);
+
+      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
+
+      // Voting rate (distinct non-NPC voters who voted on any active proposal)
+      let votingRate = 0;
+      if (activeProposalIds.length > 0) {
+        const { data: votes } = await supabase
+          .from('party_motto_votes')
+          .select('voter_member_id')
+          .in('proposal_id', activeProposalIds);
+
+        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
+        votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
+      }
+
+      const morale = (completionRate + votingRate + proposalRate) / 3;
+
+      // Tunables aligned with PRD FR21–FR24
+      const MORALE_HIGH_THRESHOLD = 0.66;
+      const MORALE_LOW_THRESHOLD = 0.33;
+
+      let level: 'Low' | 'Neutral' | 'High' = 'Neutral';
+      if (morale >= MORALE_HIGH_THRESHOLD) level = 'High';
+      else if (morale < MORALE_LOW_THRESHOLD) level = 'Low';
+
+      await supabase
+        .from('parties')
+        .update({ morale_score: morale, morale_level: level })
+        .eq('id', party.id);
+    } catch (e: any) {
+      console.warn('updateMorale skipped:', e?.message ?? e);
+    }
+  };
   // Fetch any existing vote for this member across proposals in this party
   const { data: proposalIdRows } = await supabase
     .from('party_motto_proposals')
@@ -314,6 +371,7 @@ export async function POST(
     }
     // After mutation, attempt auto-finalize (will no-op if no majority)
     await tryAutoFinalize();
+    await updateMorale();
     return NextResponse.json({ ok: true, proposalId: null });
   }
 
@@ -334,6 +392,7 @@ export async function POST(
       }
     }
     await tryAutoFinalize();
+    await updateMorale();
     return NextResponse.json({ ok: true, proposalId: targetId });
   }
 
@@ -356,6 +415,7 @@ export async function POST(
     }
 
     await tryAutoFinalize();
+    await updateMorale();
     return NextResponse.json({ ok: true, proposalId: targetId });
   }
 }

@@ -17,7 +17,7 @@ export async function GET(
   // Resolve party by code
   const { data: party, error: partyErr } = await supabase
     .from('parties')
-    .select('id, motto')
+    .select('id, motto, morale_score, morale_level')
     .eq('code', code)
     .single();
 
@@ -127,5 +127,7 @@ export async function GET(
     proposals: normalized,
     myVoteProposalId,
     leaderProposalId,
+    moraleScore: (party as any).morale_score ?? null,
+    moraleLevel: (party as any).morale_level ?? null,
   });
 }

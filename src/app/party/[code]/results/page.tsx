@@ -106,11 +106,15 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         // Prefer ResultsReady if already computed; otherwise allow Results as well
         const { data: party, error: partyErr } = await supabase
           .from('parties')
-          .select('status, motto')
+          .select('status, motto, morale_score, morale_level')
           .eq('id', currentPartyId)
           .single();
         if (partyErr) throw partyErr;
         setPartyMotto(party?.motto ?? null);
+        // Capture morale if present
+        const rawScore = typeof party?.morale_score === 'number' ? (party.morale_score as number) : (party?.morale_score ? Number(party.morale_score) : null);
+        const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
+        setPartyMorale({ score: rawScore, level: rawLevel });
 
         // Always fetch members for display (including NPCs)
         const { data: membersData, error: membersError } = await supabase
@@ -316,13 +320,24 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
   // Local state for party meta
   const [partyMotto, setPartyMotto] = useState<string | null>(null);
+  const [partyMorale, setPartyMorale] = useState<{ score: number | null; level: string | null }>({ score: null, level: null });
 
   return (
     <div className="results-container">
       <h1 className="results-title">Party Results</h1>
+
+      {/* Party Motto */}
       {partyMotto ? (
-        <div style={{ textAlign: 'center', marginBottom: '1rem', fontStyle: 'italic' }}>
+        <div style={{ textAlign: 'center', marginBottom: '0.5rem', fontStyle: 'italic' }}>
           “{partyMotto}”
+        </div>
+      ) : null}
+
+      {/* Party Morale (if available) */}
+      {partyMorale.level ? (
+        <div className={`morale-banner morale-${partyMorale.level?.toLowerCase()}`} title={`Party Morale: ${partyMorale.level}${partyMorale.score != null ? ` (${partyMorale.score.toFixed(2)})` : ''}`}>
+          Party Morale: <strong>{partyMorale.level}</strong>
+          {partyMorale.score != null ? <span className="morale-score">({partyMorale.score.toFixed(2)})</span> : null}
         </div>
       ) : null}
 
