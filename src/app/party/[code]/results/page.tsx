@@ -60,7 +60,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
             if (partyStatusError) throw partyStatusError;
 
-            if (party?.status === 'Results') {
+            if (party?.status === 'Results' || party?.status === 'ResultsReady') {
                 setCurrentStep(3); // Fetching results
                 await fetchResults(currentPartyId);
                 return true; // Stop polling
@@ -68,8 +68,9 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                 setCurrentStep(1); // Waiting for party members
                 const { data: members, error: membersError } = await supabase
                     .from('party_members')
-                    .select('first_name, assessment_status')
-                    .eq('party_id', currentPartyId);
+                    .select('first_name, assessment_status, is_npc')
+                    .eq('party_id', currentPartyId)
+                    .eq('is_npc', false);
 
                 if (membersError) throw membersError;
 
@@ -101,14 +102,39 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
     const fetchResults = async (currentPartyId: string) => {
         if (!supabase) return;
+
+        // Prefer ResultsReady if already computed; otherwise allow Results as well
+        const { data: party, error: partyErr } = await supabase
+          .from('parties')
+          .select('status')
+          .eq('id', currentPartyId)
+          .single();
+        if (partyErr) throw partyErr;
+
+        // Always fetch members for display (including NPCs)
         const { data: membersData, error: membersError } = await supabase
             .from('party_members')
-            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp')
+            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
             .eq('party_id', currentPartyId);
 
         if (membersError) throw membersError;
+
         setPartyMembers(membersData || []);
         logDebug('Final results displayed:', membersData);
+
+        // If the party just reached Results (not yet ResultsReady), invoke results calculation once
+        if (party?.status === 'Results') {
+          try {
+            const { party: storeParty, user } = usePartyStore.getState();
+            if (storeParty && user && !isCalculating) {
+              setCurrentStep(2); // Calculating results
+              await handleCheckResults();
+            }
+          } catch (e) {
+            console.error('Failed to trigger calculation from fetchResults:', e);
+          }
+        }
+
         setLoading(false);
     };
 
@@ -213,7 +239,18 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             }
 
             console.log("API call successful, checking status...");
-            // await checkStatus(partyId); // Removed to prevent loop
+            // After triggering, bump the party status locally so polling can advance to fetch
+            try {
+              const { error: partyUpdateErr } = await supabase
+                .from('parties')
+                .update({ status: 'Results' })
+                .eq('id', partyId);
+              if (partyUpdateErr) {
+                console.warn('Non-fatal: failed to bump party status to Results locally:', partyUpdateErr);
+              }
+            } catch (e) {
+              console.warn('Non-fatal: party status bump threw:', e);
+            }
 
 
         } catch (err: any) {

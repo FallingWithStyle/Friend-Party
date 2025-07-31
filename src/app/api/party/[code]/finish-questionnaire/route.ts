@@ -66,6 +66,7 @@ export async function POST(
         .from('party_members')
         .select('*', { count: 'exact', head: true })
         .eq('party_id', partyData.id)
+        .eq('is_npc', false)
         .neq('assessment_status', 'SelfAssessmentCompleted');
 
       if (countError) {
@@ -83,27 +84,41 @@ export async function POST(
         .from('party_members')
         .select('*', { count: 'exact', head: true })
         .eq('party_id', partyData.id)
+        .eq('is_npc', false)
         .neq('assessment_status', 'PeerAssessmentCompleted');
 
       if (countError) {
         throw countError;
       }
 
-      // If all members have completed peer assessment, invoke the calculation function
+      // If all non-NPC members have completed peer assessment, mark Results and invoke calculation
       if (unfinishedCount === 0) {
-        await supabase
+        const { error: statusErr } = await supabase
           .from('parties')
           .update({ status: 'Results' })
           .eq('id', partyData.id);
+        if (statusErr) {
+          console.error('Failed to set party status to Results:', statusErr);
+        }
 
-        // Don't await this, let it run in the background
+        // Trigger calculation and also set ResultsReady when function completes
         supabase.functions.invoke('calculate-results', {
           body: { party_id: partyData.id },
-        }).then(({ error: invokeError }) => {
+        }).then(async ({ error: invokeError }) => {
           if (invokeError) {
             console.error('Error invoking calculate-results function:', invokeError);
-            // Optionally, you could add more robust error handling here,
-            // like writing to an error log table in the database.
+            return;
+          }
+          try {
+            const { error: readyErr } = await supabase
+              .from('parties')
+              .update({ status: 'ResultsReady' })
+              .eq('id', partyData.id);
+            if (readyErr) {
+              console.warn('Non-fatal: failed to set ResultsReady after calc:', readyErr);
+            }
+          } catch (e) {
+            console.warn('Non-fatal: ResultsReady update threw after calc:', e);
           }
         });
       }

@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS public.party_members (
   character_class TEXT,
   class TEXT,
   assessment_status TEXT DEFAULT 'NotStarted' NOT NULL,
+  is_npc BOOLEAN DEFAULT FALSE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT unique_party_user UNIQUE (party_id, user_id)
 );
@@ -343,6 +344,7 @@ DO $$
 DECLARE
   debug_party_id UUID;
   debug_user_id UUID := 'fcd61a1f-9393-414b-8048-65a2f3ca8095';
+  david_bugg_user_id UUID := '11111111-2222-3333-4444-555555555555';
 BEGIN
   -- Create the debug party, ensuring the code is unique
   INSERT INTO public.parties (code, name, motto)
@@ -352,8 +354,25 @@ BEGIN
 
   -- Create the debug party leader if the party was created
   IF debug_party_id IS NOT NULL THEN
-    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (debug_party_id, debug_user_id, 'David Bugg', true, 'Joined', 10, 10, 10, 10, 10, 10);
+    -- Ensure a distinct auth user exists for David Bugg (or leave NULL if you prefer NPC without account)
+    INSERT INTO auth.users (id, email, encrypted_password, role)
+    VALUES ('11111111-2222-3333-4444-555555555555', 'david.bugg@test.com', crypt('password123', gen_salt('bf')), 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+    -- Make David Bugg an NPC leader but with his own user_id to avoid using Patrick's
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (debug_party_id, '11111111-2222-3333-4444-555555555555', 'David Bugg', true, 'Joined', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
+
+    -- Add Patrick as a non-NPC member in DEBUG1 for testing
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (debug_party_id, 'fcd61a1f-9393-414b-8048-65a2f3ca8095', 'Patrick', false, 'Joined', 10, 10, 10, 10, 10, 10, FALSE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
+
+    -- Seed an additional NPC (hireling) with neutral baseline 9s and no user_id
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc, adventurer_name)
+    VALUES (debug_party_id, NULL, 'Debug Hireling', 'Joined', 9, 9, 9, 9, 9, 9, TRUE, NULL)
+    ON CONFLICT DO NOTHING;
 
     -- Add additional debug members with finished status and random stats
     INSERT INTO auth.users (id, email, encrypted_password, role)
@@ -363,36 +382,62 @@ BEGIN
     INSERT INTO auth.users (id, email, encrypted_password, role)
     VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 'debug3@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Random1', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Random1', 'Finished', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 'Random2', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 'Random2', 'Finished', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 'Random3', 'Finished', floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1), floor(random() * 20 + 1))
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted';
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (debug_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 'Random3', 'Finished', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
 
-    -- Add self-assessment answers for DEBUG1 members
+    -- Add self-assessment answers for DEBUG1 members (NPCs) with a wide spread, not uniform 9s across board.
     DECLARE
       debug1_member_ids UUID[];
       debug1_q_id UUID;
       debug1_answer_opts JSONB;
       debug1_member_id UUID;
     BEGIN
+      -- Use only NPCs for Randoms; Patrick (player in DEBUG1) will be excluded by is_npc filter
       SELECT array_agg(id) INTO debug1_member_ids
       FROM public.party_members
-      WHERE party_id = debug_party_id;
+      WHERE party_id = debug_party_id AND is_npc = TRUE;
 
+      -- For each self-assessment question, insert one answer per NPC using varied weights per member
+      -- We define three weight profiles and rotate them across NPCs to create a wide spread.
+      -- profile A: STR-leaning
+      -- profile B: DEX/CHA-leaning
+      -- profile C: INT/WIS-leaning
       FOR debug1_q_id, debug1_answer_opts IN
         SELECT id, answer_options FROM public.questions WHERE question_type = 'self-assessment'
       LOOP
         FOREACH debug1_member_id IN ARRAY debug1_member_ids
         LOOP
           INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
-          VALUES (debug1_q_id, debug1_member_id, debug1_member_id, (debug1_answer_opts[1 + floor(random() * jsonb_array_length(debug1_answer_opts))::int]->>'stat'))
+          SELECT debug1_q_id, debug1_member_id, debug1_member_id, (elem->>'stat')
+          FROM jsonb_array_elements(debug1_answer_opts) elem
+          WHERE (elem->>'stat') = (
+            WITH ord AS (
+              -- Deterministic but varied selector per member/question via hash modulo rotation
+              SELECT (abs(('x'||substr(md5(debug1_member_id::text || debug1_q_id::text),1,8))::bit(32)::int)) % 3 AS pick
+            ),
+            weights AS (
+              -- pick = 0 => Profile A (STR/CN), 1 => Profile B (DEX/CHA), 2 => Profile C (INT/WIS)
+              SELECT unnest(ARRAY['STR','DEX','CON','INT','WIS','CHA']) AS stat,
+                     CASE
+                       WHEN (SELECT pick FROM ord) = 0 THEN unnest(ARRAY[5,2,4,1,2,3])  -- A: STR 5, CON 4, CHA 3, DEX 2, WIS 2, INT 1
+                       WHEN (SELECT pick FROM ord) = 1 THEN unnest(ARRAY[2,5,2,1,2,4])  -- B: DEX 5, CHA 4, STR/WIS/CON 2, INT 1
+                       ELSE                               unnest(ARRAY[1,2,2,5,4,2])  -- C: INT 5, WIS 4, DEX/CON/CHA 2, STR 1
+                     END AS w
+            ),
+            series AS (
+              SELECT stat FROM weights, generate_series(1, w)
+            )
+            SELECT stat FROM series ORDER BY random() LIMIT 1
+          )
           ON CONFLICT DO NOTHING;
         END LOOP;
       END LOOP;
@@ -438,42 +483,108 @@ BEGIN
       (samwise_user_id, 'samwise@middleearth.com', crypt('password123', gen_salt('bf')), 'authenticated')
     ON CONFLICT (id) DO NOTHING;
 
-    -- Add Patrick (as leader)
-    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader)
-    VALUES (fellowship_party_id, patrick_user_id, 'Patrick', true)
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    -- Add Patrick (as leader, player)
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (fellowship_party_id, patrick_user_id, 'Patrick', true, 'Joined', 10, 10, 10, 10, 10, 10, FALSE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO patrick_member_id;
 
-    -- Add Gandalf
-    INSERT INTO public.party_members (party_id, user_id, first_name)
-    VALUES (fellowship_party_id, gandalf_user_id, 'Gandalf')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    -- Add Gandalf as NPC
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (fellowship_party_id, gandalf_user_id, 'Gandalf', 'Joined', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO gandalf_member_id;
 
-    -- Add Frodo
-    INSERT INTO public.party_members (party_id, user_id, first_name)
-    VALUES (fellowship_party_id, frodo_user_id, 'Frodo')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    -- Add Frodo as NPC
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (fellowship_party_id, frodo_user_id, 'Frodo', 'Joined', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO frodo_member_id;
 
-    -- Add Samwise
-    INSERT INTO public.party_members (party_id, user_id, first_name)
-    VALUES (fellowship_party_id, samwise_user_id, 'Samwise')
-    ON CONFLICT (party_id, user_id) DO NOTHING
+    -- Add Samwise as NPC
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (fellowship_party_id, samwise_user_id, 'Samwise', 'Joined', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO samwise_member_id;
 
-    -- Add self-assessment answers for all members
-    member_ids := ARRAY[patrick_member_id, gandalf_member_id, frodo_member_id, samwise_member_id];
+    -- Implement weighted self-assessment seeding for Fellowship NPCs (Patrick is player; others are NPCs)
+    -- Narrative weight profiles (higher number = more likely to be chosen):
+    -- Gandalf: WIS 5, INT 4, CHA 3, DEX 2, CON 2, STR 1
+    -- Frodo  : CHA 4, WIS 3, DEX 3, CON 3, STR 2, INT 2
+    -- Samwise: CON 5, STR 3, WIS 3, DEX 2, CHA 2, INT 2
 
+    -- Helper to pick a stat from question answer_options by index
+    -- We will compute a weighted index between 1..6 for each question, mapping to a stat id, then find the option matching it.
     FOR q_id, answer_opts IN
       SELECT id, answer_options FROM public.questions WHERE question_type = 'self-assessment'
     LOOP
-      FOREACH member_id IN ARRAY member_ids
-      LOOP
-        INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
-        VALUES (q_id, member_id, member_id, answer_opts[1 + floor(random() * array_length(answer_opts, 1))::int])
-        ON CONFLICT DO NOTHING;
-      END LOOP;
+      -- Gandalf weighted pick
+      PERFORM
+      (
+        WITH weights AS (
+          SELECT unnest(ARRAY['STR','DEX','CON','INT','WIS','CHA']) AS stat,
+                 unnest(ARRAY[1,2,2,4,5,3]) AS w
+        ),
+        series AS (
+          SELECT stat
+          FROM weights, generate_series(1, w)
+        )
+        SELECT 1
+        FROM LATERAL (
+          SELECT stat FROM series ORDER BY random() LIMIT 1
+        ) pick
+        CROSS JOIN LATERAL (
+          SELECT (elem->>'stat') AS opt_stat
+          FROM jsonb_array_elements(answer_opts) elem
+        ) opts
+        WHERE opts.opt_stat = pick.stat
+      );
+      INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+      SELECT q_id, gandalf_member_id, gandalf_member_id, (elem->>'stat')
+      FROM jsonb_array_elements(answer_opts) elem
+      WHERE (elem->>'stat') = (
+        WITH weights AS (
+          SELECT unnest(ARRAY['STR','DEX','CON','INT','WIS','CHA']) AS stat,
+                 unnest(ARRAY[1,2,2,4,5,3]) AS w
+        ),
+        series AS (
+          SELECT stat FROM weights, generate_series(1, w)
+        )
+        SELECT stat FROM series ORDER BY random() LIMIT 1
+      )
+      ON CONFLICT DO NOTHING;
+
+      -- Frodo weighted pick
+      INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+      SELECT q_id, frodo_member_id, frodo_member_id, (elem->>'stat')
+      FROM jsonb_array_elements(answer_opts) elem
+      WHERE (elem->>'stat') = (
+        WITH weights AS (
+          SELECT unnest(ARRAY['STR','DEX','CON','INT','WIS','CHA']) AS stat,
+                 unnest(ARRAY[2,3,3,2,3,4]) AS w
+        ),
+        series AS (
+          SELECT stat FROM weights, generate_series(1, w)
+        )
+        SELECT stat FROM series ORDER BY random() LIMIT 1
+      )
+      ON CONFLICT DO NOTHING;
+
+      -- Samwise weighted pick
+      INSERT INTO public.answers (question_id, voter_member_id, subject_member_id, answer_value)
+      SELECT q_id, samwise_member_id, samwise_member_id, (elem->>'stat')
+      FROM jsonb_array_elements(answer_opts) elem
+      WHERE (elem->>'stat') = (
+        WITH weights AS (
+          SELECT unnest(ARRAY['STR','DEX','CON','INT','WIS','CHA']) AS stat,
+                 unnest(ARRAY[3,2,5,2,3,2]) AS w
+        ),
+        series AS (
+          SELECT stat FROM weights, generate_series(1, w)
+        )
+        SELECT stat FROM series ORDER BY random() LIMIT 1
+      )
+      ON CONFLICT DO NOTHING;
     END LOOP;
 
   END IF;
@@ -508,9 +619,9 @@ BEGIN
 
   -- If the party was created, add members with zero stats
   IF test_party_id IS NOT NULL THEN
-    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (test_party_id, 'fcd61a1f-9393-414b-8048-65a2f3ca8095', 'Patrick', true, 'Joined', 0, 0, 0, 0, 0, 0)
-    ON CONFLICT (party_id, user_id) DO NOTHING;
+    INSERT INTO public.party_members (party_id, user_id, first_name, is_leader, status, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (test_party_id, 'fcd61a1f-9393-414b-8048-65a2f3ca8095', 'Patrick', true, 'Joined', 10, 10, 10, 10, 10, 10, FALSE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc;
 
     -- Add mock users to auth.users for DEBUG2 additional members
     INSERT INTO auth.users (id, email, encrypted_password, role)
@@ -523,27 +634,27 @@ BEGIN
     VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'finisher4@test.com', crypt('password123', gen_salt('bf')), 'authenticated') ON CONFLICT (id) DO NOTHING;
 
     -- Add other members with zero stats
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 'Zero1', 'Finished', 'Zero 1', 0, 0, 0, 0, 0, 0)
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 'Zero1', 'Finished', 'Zero 1', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO member1_id;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 'Zero2', 'Finished', 'Zero 2', 0, 0, 0, 0, 0, 0)
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 'Zero2', 'Finished', 'Zero 2', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO member2_id;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 'Zero3', 'Finished', 'Zero 3', 0, 0, 0, 0, 0, 0)
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 'Zero3', 'Finished', 'Zero 3', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO member3_id;
 
-    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma)
-    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'Zero4', 'Finished', 'Zero 4', 0, 0, 0, 0, 0, 0)
-    ON CONFLICT (party_id, user_id) DO UPDATE SET assessment_status = 'PeerAssessmentCompleted'
+    INSERT INTO public.party_members (party_id, user_id, first_name, status, adventurer_name, strength, dexterity, constitution, intelligence, wisdom, charisma, is_npc)
+    VALUES (test_party_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'Zero4', 'Finished', 'Zero 4', 9, 9, 9, 9, 9, 9, TRUE)
+    ON CONFLICT (party_id, user_id) DO UPDATE SET is_npc = EXCLUDED.is_npc
     RETURNING id INTO member4_id;
 
-    -- Add self-assessment answers for all members
+    -- All members in this test party are NPCs; skip self-assessment seeding
     member_ids := ARRAY[patrick_member_id, member1_id, member2_id, member3_id, member4_id];
 
     FOR q_id, answer_opts IN

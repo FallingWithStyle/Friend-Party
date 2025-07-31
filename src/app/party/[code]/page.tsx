@@ -18,6 +18,7 @@ interface Member {
   is_leader: boolean;
   status: string;
   adventurer_name: string | null;
+  is_npc: boolean; // Add is_npc property
 }
 
 interface NameProposal {
@@ -59,9 +60,12 @@ export default function PartyLobbyPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [proposals, setProposals] = useState<NameProposal[]>([]);
   const [votes, setVotes] = useState<NameProposalVote[]>([]);
+  // Track hireling votes as a stable count map keyed by target member id
+  const [hirelingVoteCountsMap, setHirelingVoteCountsMap] = useState<{ [key: string]: number }>({});
   const [nameProposalInput, setNameProposalInput] = useState<{ [key: string]: string }>({});
   const [currentUserMember, setCurrentUserMember] = useState<Member | null>(null);
   const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
+  const [showVoteMenu, setShowVoteMenu] = useState<string | null>(null); // State to control which member's vote menu is open
 
   // Add these at the top level
   const [selfCompleted, setSelfCompleted] = useState(false);
@@ -90,19 +94,34 @@ export default function PartyLobbyPage() {
     if (!party) return;
 
     const fetchData = async () => {
-      const { data: memberData } = await supabase.from('party_members').select('*').eq('party_id', party.id).order('created_at');
-      if (memberData) setMembers(memberData);
-
-      const { data: proposalData } = await supabase.from('name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
-      if (proposalData) setProposals(proposalData);
-
-      const { data: voteData } = await supabase.from('name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
-      if (voteData) setVotes(voteData as VoteWithProposalParty[]);
-    };
+       const { data: memberData } = await supabase.from('party_members').select('*').eq('party_id', party.id).order('created_at');
+       if (memberData) setMembers(memberData);
+ 
+       const { data: proposalData } = await supabase.from('name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
+       if (proposalData) setProposals(proposalData);
+ 
+       const { data: voteData } = await supabase.from('name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
+       if (voteData) setVotes(voteData as VoteWithProposalParty[]);
+ 
+       const { data: hirelingVoteData, error: hirelingVoteError } = await supabase
+         .from('hireling_conversion_votes')
+         .select('party_member_id_being_voted_on, vote');
+       if (hirelingVoteError) console.error('Error fetching hireling votes:', hirelingVoteError);
+       if (hirelingVoteData) {
+         const initialCounts = hirelingVoteData.reduce((acc: { [key: string]: number }, row: any) => {
+           if (row.vote) {
+             acc[row.party_member_id_being_voted_on] = (acc[row.party_member_id_being_voted_on] || 0) + 1;
+           }
+           return acc;
+         }, {});
+         setHirelingVoteCountsMap(initialCounts);
+       }
+     };
 
     fetchData();
 
-    const channel = supabase.channel(`party-lobby-${party.id}`);
+    // Align channel with backend broadcasts which use `party-${code}`
+    const channel = supabase.channel(`party-${code}`);
 
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload: any) => {
       if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
@@ -122,13 +141,52 @@ export default function PartyLobbyPage() {
       // We need to fetch the proposal party_id to ensure it belongs to this party
       // This is a simplified approach for the subscription payload
       setVotes(current => [...current, payload.new as NameProposalVote]);
-    }).subscribe();
-
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [party, supabase]);
+    })
+    // Listen to backend broadcasts for hireling voting updates
+    .on('broadcast', { event: 'hireling_vote_updated' }, (payload: any) => {
+      const { target_party_member_id, current_yes_votes } = payload?.payload || {};
+      if (!target_party_member_id || typeof current_yes_votes !== 'number') return;
+      setHirelingVoteCountsMap((prev) => ({
+        ...prev,
+        [target_party_member_id]: current_yes_votes,
+      }));
+    })
+    .on('broadcast', { event: 'hireling_converted' }, (payload: any) => {
+      const { party_member_id } = payload?.payload || {};
+      if (!party_member_id) return;
+      // Update members to reflect is_npc=true
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === party_member_id ? { ...m, is_npc: true } : m
+        )
+      );
+      // Remove any vote status UI by clearing counts for this member
+      setHirelingVoteCountsMap((prev) => {
+        if (!prev[party_member_id]) return prev;
+        const next = { ...prev };
+        delete next[party_member_id];
+        return next;
+      });
+    })
+    .subscribe();
+ 
+     return () => {
+       supabase.removeChannel(channel);
+     };
+   }, [party, supabase]); // Removed members from dependencies to avoid re-subscription issues with filter
+ 
+   // Expose the memoized map directly for rendering
+   const hirelingVoteCounts = useMemo(() => hirelingVoteCountsMap, [hirelingVoteCountsMap]);
+ 
+   // Memoized eligible hireling voter counts
+   const eligibleHirelingVoterCounts = useMemo(() => {
+     return members.reduce((acc, member) => {
+       // Eligible voters are non-NPCs excluding target
+       acc[member.id] = members.filter(m => !m.is_npc && m.id !== member.id).length;
+       return acc;
+     }, {} as { [key: string]: number });
+   }, [members]);
+ 
 
   // --- Memoized Vote Counts ---
   const voteCounts = useMemo(() => {
@@ -170,6 +228,22 @@ export default function PartyLobbyPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proposal_id: proposalId }),
     });
+  };
+
+  const handleVoteToMakeHireling = async (targetMemberId: string) => {
+    if (!currentUserMember) return;
+    setShowVoteMenu(null); // Close menu after clicking
+
+    const response = await fetch(`/api/party/${code}/vote-hireling-conversion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_party_member_id: targetMemberId, vote: true }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to cast vote for hireling conversion');
+      // TODO: Display user-friendly error message
+    }
   };
 
   const handleStartQuest = async () => {
@@ -301,7 +375,10 @@ export default function PartyLobbyPage() {
             if (member.adventurer_name) {
               return (
                 <div key={member.id} className="member-card">
-                  <h3 className="member-name">{member.first_name} {member.is_leader && '👑'}</h3>
+                  <h3 className="member-name">
+                    {member.first_name} {member.is_leader && '👑'}
+                    {member.is_npc && <span className="hireling-tag">(Hireling)</span>}
+                  </h3>
                   <p className="adventurer-name">"{member.adventurer_name}"</p>
                 </div>
               );
@@ -313,7 +390,27 @@ export default function PartyLobbyPage() {
 
             return (
               <div key={member.id} className="member-card">
-                <h3 className="member-name">{member.first_name} {member.is_leader && '👑'} - Needs a Name!</h3>
+                <h3 className="member-name">
+                  {member.first_name} {member.is_leader && '👑'} - Needs a Name!
+                  {!member.is_npc && currentUserMember?.id !== member.id && (
+                    <div className="member-options">
+                      <button className="options-icon" onClick={() => setShowVoteMenu(member.id)}>⋮</button>
+                      {showVoteMenu === member.id && (
+                        <div className="vote-menu">
+                          <button onClick={() => handleVoteToMakeHireling(member.id)}>Vote to make Hireling</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {member.is_npc && <span className="hireling-tag">(Hireling)</span>}
+                </h3>
+                
+                {/* Display hireling vote status (hidden once member becomes NPC) */}
+                {!member.is_npc && eligibleHirelingVoterCounts[member.id] > 0 && (
+                  <p className="hireling-vote-status">
+                    Hireling Vote: {hirelingVoteCounts[member.id] || 0}/{eligibleHirelingVoterCounts[member.id]}
+                  </p>
+                )}
                 
                 {isTie && canBreakTie && (
                   <div className="tie-breaker-card">
@@ -343,6 +440,7 @@ export default function PartyLobbyPage() {
                   ))}
                   {memberProposals.length === 0 && <p className="no-proposals-text">No names proposed yet.</p>}
                 </div>
+                {/* TODO: Implement real-time vote status display for hireling conversion */}
 
                 {currentUserMember && currentUserMember.id !== member.id && (
                   <div className="propose-name-container">
