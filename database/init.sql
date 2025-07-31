@@ -13,6 +13,17 @@ DROP POLICY IF EXISTS "Allow members to see answers in their party" ON public.an
 DROP POLICY IF EXISTS "Allow all users to read questions" ON public.questions;
 DROP POLICY IF EXISTS "Allow members to insert motto proposals in their party" ON public.party_motto_proposals;
 DROP POLICY IF EXISTS "Allow members to see motto proposals in their party" ON public.party_motto_proposals;
+-- Guard DROPs for party_motto_votes only if the table exists to avoid 42P01 during init
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='party_motto_votes') THEN
+    EXECUTE 'DROP POLICY IF EXISTS "pm_motto_votes_select" ON public.party_motto_votes';
+    EXECUTE 'DROP POLICY IF EXISTS "pm_motto_votes_insert" ON public.party_motto_votes';
+    EXECUTE 'DROP POLICY IF EXISTS "pm_motto_votes_update" ON public.party_motto_votes';
+    EXECUTE 'DROP POLICY IF EXISTS "pm_motto_votes_delete" ON public.party_motto_votes';
+  END IF;
+END $$;
+DROP POLICY IF EXISTS "pm_motto_update_leader" ON public.party_motto_proposals;
 DROP POLICY IF EXISTS "Allow members to cast votes in their party" ON public.name_proposal_votes;
 DROP POLICY IF EXISTS "Allow members to see votes in their party" ON public.name_proposal_votes;
 DROP POLICY IF EXISTS "Allow members to insert proposals in their party" ON public.name_proposals;
@@ -36,6 +47,7 @@ DROP FUNCTION IF EXISTS public.generate_peer_assessment_distribution(uuid);
 -- Drop Tables
 DROP TABLE IF EXISTS public.answers CASCADE;
 DROP TABLE IF EXISTS public.name_proposal_votes CASCADE;
+DROP TABLE IF EXISTS public.party_motto_votes CASCADE;
 DROP TABLE IF EXISTS public.party_motto_proposals CASCADE;
 DROP TABLE IF EXISTS public.name_proposals CASCADE;
 DROP TABLE IF EXISTS public.peer_assessment_assignments CASCADE;
@@ -150,12 +162,24 @@ COMMENT ON COLUMN public.name_proposal_votes.voter_member_id IS 'The party membe
 CREATE TABLE IF NOT EXISTS public.party_motto_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID REFERENCES public.parties(id) ON DELETE CASCADE NOT NULL,
+    -- Legacy column retained for compatibility (backend normalizes)
     proposing_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
+    -- New columns are added via migrations; legacy columns remain for fallback
     proposed_motto TEXT NOT NULL,
     votes INT DEFAULT 0 NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 COMMENT ON TABLE public.party_motto_proposals IS 'Stores proposed mottos for the party.';
+-- Votes table for party motto proposals (new)
+CREATE TABLE IF NOT EXISTS public.party_motto_votes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id UUID REFERENCES public.party_motto_proposals(id) ON DELETE CASCADE NOT NULL,
+    voter_member_id UUID REFERENCES public.party_members(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE (proposal_id, voter_member_id)
+);
+COMMENT ON TABLE public.party_motto_votes IS 'Tracks votes for proposed party mottos.';
+COMMENT ON COLUMN public.party_motto_votes.voter_member_id IS 'The party member who cast the vote.';
 
 CREATE TABLE IF NOT EXISTS public.peer_assessment_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -282,12 +306,23 @@ ALTER TABLE public.answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.name_proposal_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.party_motto_proposals ENABLE ROW LEVEL SECURITY;
+-- Enable RLS on party_motto_votes only if it exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='party_motto_votes') THEN
+    EXECUTE 'ALTER TABLE public.party_motto_votes ENABLE ROW LEVEL SECURITY';
+  END IF;
+END $$;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.peer_assessment_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.peer_assessment_assignMENTS ENABLE ROW LEVEL SECURITY;
 
 -- Policies for public.parties
 CREATE POLICY "Allow authenticated users to create parties" ON public.parties FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Allow users to read parties they are a member of" ON public.parties FOR SELECT TO authenticated USING (true);
+-- Tighten SELECT to members-only for consistency with UI expectations
+DROP POLICY IF EXISTS "Allow users to read parties they are a member of" ON public.parties;
+CREATE POLICY "Allow users to read parties they are a member of" ON public.parties FOR SELECT TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.party_members pm WHERE pm.party_id = parties.id AND pm.user_id = auth.uid())
+);
 
 -- Policies for public.profiles
 CREATE POLICY "Allow authenticated users to read their own profile" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = user_id);
@@ -316,8 +351,109 @@ CREATE POLICY "Allow members to see votes in their party" ON public.name_proposa
 CREATE POLICY "Allow members to cast votes in their party" ON public.name_proposal_votes FOR INSERT WITH CHECK (voter_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
 
 -- Policies for public.party_motto_proposals
-CREATE POLICY "Allow members to see motto proposals in their party" ON public.party_motto_proposals FOR SELECT USING (is_party_member(party_id, auth.uid()));
-CREATE POLICY "Allow members to insert motto proposals in their party" ON public.party_motto_proposals FOR INSERT WITH CHECK (proposing_member_id IN (SELECT id FROM party_members WHERE user_id = auth.uid()));
+DROP POLICY IF EXISTS "Allow members to see motto proposals in their party" ON public.party_motto_proposals;
+CREATE POLICY "Allow members to see motto proposals in their party" ON public.party_motto_proposals
+FOR SELECT USING (is_party_member(party_id, auth.uid()));
+
+-- Make INSERT resilient to legacy/new proposer column drift without referencing missing columns
+DROP POLICY IF EXISTS "Allow members to insert motto proposals in their party" ON public.party_motto_proposals;
+CREATE POLICY "Allow members to insert motto proposals in their party" ON public.party_motto_proposals
+FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.party_members pm
+    WHERE pm.id = public.party_motto_proposals.proposing_member_id
+      AND pm.party_id = public.party_motto_proposals.party_id
+      AND pm.user_id = auth.uid()
+  )
+);
+
+-- Optional: leader-only updates for finalize/deactivate when not using service role
+DROP POLICY IF EXISTS "pm_motto_update_leader" ON public.party_motto_proposals;
+CREATE POLICY "pm_motto_update_leader" ON public.party_motto_proposals
+FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM public.party_members pm
+    WHERE pm.party_id = public.party_motto_proposals.party_id
+      AND pm.user_id = auth.uid()
+      AND pm.is_leader = true
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.party_members pm
+    WHERE pm.party_id = public.party_motto_proposals.party_id
+      AND pm.user_id = auth.uid()
+      AND pm.is_leader = true
+  )
+);
+
+-- Policies for public.party_motto_votes (create only if table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='party_motto_votes') THEN
+    EXECUTE '
+      DROP POLICY IF EXISTS "pm_motto_votes_select" ON public.party_motto_votes;
+      CREATE POLICY "pm_motto_votes_select" ON public.party_motto_votes
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1
+          FROM public.party_motto_proposals p
+          JOIN public.party_members me ON me.party_id = p.party_id
+          WHERE public.party_motto_votes.proposal_id = p.id
+            AND me.user_id = auth.uid()
+        )
+      )';
+
+    EXECUTE '
+      DROP POLICY IF EXISTS "pm_motto_votes_insert" ON public.party_motto_votes;
+      CREATE POLICY "pm_motto_votes_insert" ON public.party_motto_votes
+      FOR INSERT WITH CHECK (
+        EXISTS (
+          SELECT 1
+          FROM public.party_motto_proposals p
+          JOIN public.party_members me ON me.party_id = p.party_id
+          WHERE public.party_motto_votes.proposal_id = p.id
+            AND public.party_motto_votes.voter_member_id = me.id
+            AND me.user_id = auth.uid()
+        )
+      )';
+
+    EXECUTE '
+      DROP POLICY IF EXISTS "pm_motto_votes_update" ON public.party_motto_votes;
+      CREATE POLICY "pm_motto_votes_update" ON public.party_motto_votes
+      FOR UPDATE USING (
+        EXISTS (
+          SELECT 1
+          FROM public.party_motto_votes v
+          JOIN public.party_members me ON me.id = v.voter_member_id
+          WHERE v.id = public.party_motto_votes.id
+            AND me.user_id = auth.uid()
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1
+          FROM public.party_motto_proposals p_new
+          JOIN public.party_members me ON me.party_id = p_new.party_id
+          WHERE public.party_motto_votes.proposal_id = p_new.id
+            AND public.party_motto_votes.voter_member_id = me.id
+            AND me.user_id = auth.uid()
+        )
+      )';
+
+    EXECUTE '
+      DROP POLICY IF EXISTS "pm_motto_votes_delete" ON public.party_motto_votes;
+      CREATE POLICY "pm_motto_votes_delete" ON public.party_motto_votes
+      FOR DELETE USING (
+        EXISTS (
+          SELECT 1 FROM public.party_members me
+          WHERE me.id = public.party_motto_votes.voter_member_id
+            AND me.user_id = auth.uid()
+        )
+      )';
+  END IF;
+END $$;
 
 -- Policies for public.peer_assessment_assignments
 CREATE POLICY "Allow members to see their own assessment assignments" ON public.peer_assessment_assignments FOR SELECT TO authenticated USING (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));

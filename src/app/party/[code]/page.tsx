@@ -142,6 +142,11 @@ export default function PartyLobbyPage() {
            setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
            // stash leader proposal id for UI pinning
            (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+         } else if (resp.status === 401 || resp.status === 403) {
+           // Ignore unauthorized/forbidden to avoid wiping optimistic state
+         } else {
+           // Non-ok error: do not clear optimistic items
+           console.warn('Failed to load mottos:', resp.status);
          }
        } catch (e) {
          console.warn('Failed to load mottos:', e);
@@ -205,7 +210,31 @@ export default function PartyLobbyPage() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
       const row = payload.new;
       if (payload.eventType === 'INSERT') {
-        setMottoProposals(curr => [...curr, { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }]);
+        // Merge-safe: replace optimistic placeholder (id starts with 'optimistic-')
+        setMottoProposals(curr => {
+          // If we already have this canonical id, upsert/update
+          if (curr.some(p => p.id === row.id)) {
+            return curr.map(p => p.id === row.id
+              ? { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
+              : p);
+          }
+          // Try to find an optimistic item with the same text OR a close match of trimmed/lowercased text
+          const norm = (s: any) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+          const idx = curr.findIndex(p =>
+            p.id.startsWith('optimistic-') &&
+            (norm(p.text) === norm(row.text))
+          );
+          if (idx >= 0) {
+            const copy = curr.slice();
+            copy[idx] = { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active };
+            return copy;
+          }
+          // Otherwise append canonical
+          return [
+            ...curr,
+            { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
+          ];
+        });
       } else if (payload.eventType === 'UPDATE') {
         setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
         if (row.is_finalized) setPartyMotto(row.text);
@@ -214,14 +243,31 @@ export default function PartyLobbyPage() {
       }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload: any) => {
-      // Simple refetch of vote state to stay consistent
+      // Soft re-sync vote state, but preserve optimistic placeholders if present
       fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
-        .then(r => r.ok ? r.json() : null)
+        .then(async r => {
+          if (r.ok) return r.json();
+          if (r.status === 401 || r.status === 403) return null; // ignore auth failures
+          console.warn('Resync mottos failed:', r.status);
+          return null;
+        })
         .then(json => {
           if (!json) return;
-          setMottoProposals((json.proposals ?? []).map((p: any) => ({
-            id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
-          })));
+          const incoming: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }[] =
+            (json.proposals ?? []).map((p: any) => ({
+              id: String(p.id),
+              text: String(p.text ?? ''),
+              vote_count: typeof p.vote_count === 'number' ? p.vote_count : 0,
+              is_finalized: !!p.is_finalized,
+              active: !!p.active
+            }));
+          setMottoProposals((prev: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }[]) => {
+            const byId = new Map<string, { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }>(
+              incoming.map((p) => [p.id, p])
+            );
+            // Replace existing by id; keep any optimistic entries not yet materialized
+            return prev.map((p) => byId.get(p.id) ?? p);
+          });
           setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
           setPartyMotto(json.partyMotto ?? null);
           (window as any).__leaderProposalId = json.leaderProposalId ?? null;
@@ -492,25 +538,234 @@ export default function PartyLobbyPage() {
   const handleProposeMotto = async () => {
     const t = newMottoText.trim();
     if (!t) return;
-    const resp = await fetch(`/api/party/${code}/propose-motto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: t }),
-    });
-    if (resp.ok) {
-      setNewMottoText('');
-      // refreshed via realtime or can refetch
+
+    // Optimistically append immediately for snappy UX
+    const tempId = `optimistic-m-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      text: t,
+      vote_count: 0,
+      is_finalized: false,
+      active: true,
+    };
+    setMottoProposals((prev) => [...prev, optimistic]);
+    setNewMottoText('');
+
+    try {
+      const resp = await fetch(`/api/party/${code}/propose-motto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: t }),
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        const created = json?.proposal;
+        if (created?.id) {
+          // Replace optimistic with canonical row from server (works for both legacy/new schema normalized by API)
+          setMottoProposals((prev) =>
+            prev.map((p) =>
+              p.id === tempId
+                ? {
+                    id: created.id,
+                    text: created.text,
+                    vote_count: created.vote_count ?? 0,
+                    is_finalized: !!created.is_finalized,
+                    active: created.active ?? true,
+                  }
+                : p
+            )
+          );
+        } else {
+          // No direct row returned; allow realtime to reconcile. As a guard, keep the optimistic row and soft-refetch in background.
+          fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
+            .then(async (r) => {
+              if (r.ok) return r.json();
+              if (r.status === 401 || r.status === 403) return null;
+              console.warn('Background refetch mottos failed:', r.status);
+              return null;
+            })
+            .then((data) => {
+              if (!data) return;
+              // Merge incoming list without dropping optimistic if its text isn't present yet
+              const incoming = (data.proposals ?? []).map((p: any) => ({
+                id: String(p.id),
+                text: String(p.text ?? ''),
+                vote_count: typeof p.vote_count === 'number' ? p.vote_count : 0,
+                is_finalized: !!p.is_finalized,
+                active: !!p.active,
+              }));
+              setMottoProposals((prev: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }[]) => {
+                // If any server item has the same normalized text as our optimistic, replace it
+                const norm = (s: string) => s.trim().toLowerCase();
+                const match = incoming.find((p: { id: string; text: string }) => norm(p.text) === norm(t));
+                if (match) {
+                  return prev.map((p: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }) => (p.id === tempId ? match : p));
+                }
+                // Otherwise, append any server items we don't already have; keep optimistic
+                const existingIds = new Set(prev.map((p: { id: string }) => p.id));
+                return [
+                  ...prev,
+                  ...incoming.filter((p: { id: string }) => !existingIds.has(p.id)),
+                ];
+              });
+              setMyMottoVoteProposalId(data.myVoteProposalId ?? null);
+              setPartyMotto(data.partyMotto ?? null);
+              (window as any).__leaderProposalId = data.leaderProposalId ?? null;
+            })
+            .catch(() => {});
+        }
+      } else {
+        // Revert optimistic item if server rejected
+        setMottoProposals((prev) => prev.filter((p) => p.id !== tempId));
+        console.error('Failed to propose motto');
+      }
+    } catch (e) {
+      // Network or unexpected error: keep optimistic until realtime/next fetch arrives
+      console.error('Failed to propose motto', e);
     }
   };
 
-  const handleVoteMotto = async (proposalId: string | null) => {
-    const resp = await fetch(`/api/party/${code}/vote-motto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposal_id: proposalId }),
+  // Resolve to canonical id when needed and optimistically update UI
+  const handleVoteMotto = async (proposalId: string | null, proposalText?: string) => {
+    // If attempting to vote and proposalId looks optimistic, try to resolve to canonical id first
+    let resolvedId: string | null = proposalId;
+    if (proposalId && proposalId.startsWith && proposalId.startsWith('optimistic-')) {
+      try {
+        const r = await fetch(`/api/party/${code}/mottos`, { cache: 'no-store' });
+        if (r.ok) {
+          const data = await r.json();
+          const match = (data?.proposals ?? []).find((p: any) => (p.text ?? '') === (proposalText ?? ''));
+          if (match?.id && typeof match.id === 'string') {
+            resolvedId = match.id;
+            // Immediately swap optimistic id to canonical in local state to prevent future stale posts
+            setMottoProposals(prev => prev.map(p => p.id === proposalId ? { ...p, id: match.id } : p));
+          }
+        }
+      } catch {
+        // ignore resolution failure; will fail fast below if still invalid
+      }
+      // If still not resolved, bail to avoid 400s; let realtime bring canonical row then user can vote
+      if (resolvedId && resolvedId.startsWith('optimistic-')) {
+        return;
+      }
+    }
+
+    // Optimistic update for instant feedback
+    const prevSelection = myMottoVoteProposalId;
+    const idToUse = resolvedId;
+
+    setMottoProposals(prev => {
+      if (!idToUse && prevSelection) {
+        // Unvote: decrement previous selection
+        return prev.map(p =>
+          p.id === prevSelection ? { ...p, vote_count: Math.max((p.vote_count ?? 0) - 1, 0) } : p
+        );
+      }
+      if (idToUse) {
+        // Vote new: increment chosen and decrement previous if different
+        return prev.map(p => {
+          if (p.id === idToUse) return { ...p, vote_count: (p.vote_count ?? 0) + 1 };
+          if (prevSelection && p.id === prevSelection) return { ...p, vote_count: Math.max((p.vote_count ?? 0) - 1, 0) };
+          return p;
+        });
+      }
+      return prev;
     });
-    if (!resp.ok) {
-      console.error('Failed to cast/un-cast motto vote');
+    setMyMottoVoteProposalId(idToUse ?? null);
+
+    try {
+      const resp = await fetch(`/api/party/${code}/vote-motto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Provide both id and text so API can resolve in edge cases
+        body: JSON.stringify({ proposal_id: idToUse, proposal_text: proposalText ?? null }),
+      });
+      if (!resp.ok) {
+        // Revert optimistic change
+        setMottoProposals(prev => {
+          if (!proposalId && prevSelection) {
+            return prev.map(p =>
+              p.id === prevSelection ? { ...p, vote_count: (p.vote_count ?? 0) + 1 } : p
+            );
+          }
+          if (proposalId) {
+            return prev.map(p => {
+              // Revert using resolved canonical id if server provided one
+              const target = (async () => {
+                try {
+                  const r = await fetch(`/api/party/${code}/mottos`, { cache: 'no-store' });
+                  if (r.ok) {
+                    const d = await r.json();
+                    const match = (d?.proposals ?? []).find((pp: any) => pp.text === proposalText);
+                    return match?.id ?? proposalId;
+                  }
+                } catch {}
+                return proposalId;
+              })();
+              // Since we cannot await in setState, fall back immediately to proposalId here;
+              // a following soft re-sync below will correct counts by id.
+              if (p.id === proposalId) return { ...p, vote_count: Math.max((p.vote_count ?? 0) - 1, 0) };
+              if (prevSelection && p.id === prevSelection) return { ...p, vote_count: (p.vote_count ?? 0) + 1 };
+              return p;
+            });
+          }
+          return prev;
+        });
+        setMyMottoVoteProposalId(prevSelection);
+        // Soft re-sync
+        fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
+          .then(async r => {
+            if (r.ok) return r.json();
+            if (r.status === 401 || r.status === 403) return null; // ignore to preserve optimistic state
+            console.warn('Soft resync mottos failed:', r.status);
+            return null;
+          })
+          .then(json => {
+            if (!json) return;
+            setMottoProposals((json.proposals ?? []).map((p: any) => ({
+              id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+            })));
+            setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+            setPartyMotto(json.partyMotto ?? null);
+            (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+          })
+          .catch(() => {});
+      }
+    } catch (e) {
+      // Network failure: revert and re-sync
+      setMottoProposals(prev => {
+        if (!proposalId && prevSelection) {
+          return prev.map(p =>
+            p.id === prevSelection ? { ...p, vote_count: (p.vote_count ?? 0) + 1 } : p
+          );
+        }
+        if (proposalId) {
+          return prev.map(p => {
+            if (p.id === proposalId) return { ...p, vote_count: Math.max((p.vote_count ?? 0) - 1, 0) };
+            if (prevSelection && p.id === prevSelection) return { ...p, vote_count: (p.vote_count ?? 0) + 1 };
+            return p;
+          });
+        }
+        return prev;
+      });
+      setMyMottoVoteProposalId(prevSelection);
+      fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
+        .then(async r => {
+          if (r.ok) return r.json();
+          if (r.status === 401 || r.status === 403) return null; // ignore to preserve optimistic state
+          console.warn('Soft resync mottos failed:', r.status);
+          return null;
+        })
+        .then(json => {
+          if (!json) return;
+          setMottoProposals((json.proposals ?? []).map((p: any) => ({
+            id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+          })));
+          setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
+          setPartyMotto(json.partyMotto ?? null);
+          (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+        })
+        .catch(() => {});
     }
   };
 
@@ -616,10 +871,20 @@ export default function PartyLobbyPage() {
                             {p.vote_count || 0}{eligible > 0 ? `/${threshold}` : ''}
                           </span>
                           {!finalized ? (
-                            isMine ? (
+                            // If this is still an optimistic placeholder, disable voting until canonical id arrives
+                            p.id.startsWith('optimistic-') ? (
+                              <button className="vote-button motto-vote-btn" disabled title="Saving…">Pending…</button>
+                            ) : isMine ? (
                               <button className="vote-button motto-vote-btn" onClick={() => handleVoteMotto(null)}>Unvote</button>
                             ) : (
-                              <button className="vote-button motto-vote-btn" onClick={() => handleVoteMotto(p.id)}>Vote</button>
+                              <button
+                                className="vote-button motto-vote-btn"
+                                onClick={() => handleVoteMotto(p.id, p.text)}
+                                data-proposal-id={p.id}
+                                data-proposal-text={p.text}
+                              >
+                                Vote
+                              </button>
                             )
                           ) : (
                             <span className="vote-count" title="Finalized">✔</span>

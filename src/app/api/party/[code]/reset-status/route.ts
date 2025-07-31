@@ -6,13 +6,17 @@ import path from 'path';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } } // Ensure params is correctly typed
+  context: { params: Promise<{ code: string }> } | { params: { code: string } }
 ) {
   if (!IS_DEBUG_MODE) {
     return new NextResponse('Debug mode is not enabled.', { status: 403 });
   }
 
-  const { code: partyCode } = await params; // Await params to access its properties
+  const p = (context as any).params;
+  const { code: partyCode } =
+    typeof p?.then === 'function'
+      ? await (p as Promise<{ code: string }>)
+      : (p as { code: string });
   const supabase = await createClient(); // Await the client creation
 
   try {

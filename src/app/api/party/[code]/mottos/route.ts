@@ -25,42 +25,83 @@ export async function GET(
     return NextResponse.json({ error: 'Party not found' }, { status: 404 });
   }
 
-  // Resolve authed user (optional)
+  // Resolve authed user; require membership so RLS doesn't silently return empty
   const { data: userResp } = await supabase.auth.getUser();
   const userId = userResp?.user?.id ?? null;
 
-  // Resolve member id only if user present
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Resolve member id and enforce membership
   let meMemberId: string | null = null;
-  if (userId) {
+  {
     const { data: meMember, error: meErr } = await supabase
       .from('party_members')
       .select('id')
       .eq('party_id', party.id)
       .eq('user_id', userId)
       .maybeSingle();
-    if (!meErr && meMember?.id) {
-      meMemberId = meMember.id;
+    if (meErr || !meMember?.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    // Do not hard-fail on meErr; continue with public proposals/motto
+    meMemberId = meMember.id;
   }
 
-  // List proposals in this party (include proposer name for leader detection)
-  const { data: proposals, error: propErr } = await supabase
-    .from('party_motto_proposals')
-    .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
-    .eq('party_id', party.id)
-    .order('created_at', { ascending: true });
+  // List proposals in this party (active first), support both legacy and new schemas
+  // We select a superset with aliases so the rest of the handler can stay consistent.
+  // Try new-schema columns first (2025 migration)
+  let proposals: any[] | null = null;
+  let propErr: any = null;
+
+  const tryNew = async () => {
+    const res = await supabase
+      .from('party_motto_proposals')
+      .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
+      .eq('party_id', party.id)
+      .order('active', { ascending: false })
+      .order('created_at', { ascending: true });
+    return res;
+  };
+
+  const tryLegacy = async () => {
+    const res = await supabase
+      .from('party_motto_proposals')
+      .select('id, party_id, proposing_member_id, proposed_motto, votes, created_at')
+      .eq('party_id', party.id)
+      .order('created_at', { ascending: true });
+    return res;
+  };
+
+  {
+    const resNew = await tryNew();
+    if (!resNew.error) {
+      proposals = resNew.data ?? [];
+      propErr = null;
+    } else {
+      // Only fallback on unknown column errors
+      const isUnknownCol = resNew.error.code === '42703';
+      if (isUnknownCol) {
+        const resLegacy = await tryLegacy();
+        proposals = resLegacy.data ?? [];
+        // If legacy selection itself 42703s (mixed environments), don't hard fail; treat as empty.
+        if (resLegacy.error && resLegacy.error.code === '42703') {
+          console.error('mottos GET legacy fallback also missing columns; treating as empty. fallback error:', resLegacy.error);
+          propErr = null;
+          proposals = [];
+        } else {
+          propErr = resLegacy.error;
+        }
+      } else {
+        proposals = null;
+        propErr = resNew.error;
+      }
+    }
+  }
 
   if (propErr) {
-    // Return safe payload rather than 500 to avoid breaking UI; log server-side
-    return NextResponse.json({
-      partyId: party.id,
-      partyMotto: party.motto ?? null,
-      proposals: [],
-      myVoteProposalId: null,
-      leaderProposalId: null,
-      warning: 'Failed to fetch proposals'
-    }, { status: 200 });
+    console.error('mottos GET proposals error:', propErr);
+    return NextResponse.json({ error: 'Failed to fetch proposals' }, { status: 500 });
   }
 
   // Determine leader's party_member.id if any
@@ -81,7 +122,7 @@ export async function GET(
       proposals: [],
       myVoteProposalId: null,
       leaderProposalId: null,
-    });
+    }, { status: 200 });
   }
 
   // If we have a member id, fetch their vote (take first match)
@@ -101,16 +142,34 @@ export async function GET(
     // Ignore errors; treat as no vote to avoid failing UI
   }
 
+  // Normalize proposals to a unified shape so downstream stays stable
+  const normalized = (proposals ?? []).map((p: any) => ({
+    id: p.id,
+    party_id: p.party_id,
+    proposed_by_member_id: p.proposed_by_member_id ?? p.proposing_member_id ?? null,
+    text: p.text ?? p.proposed_motto ?? '',
+    vote_count: typeof p.vote_count === 'number' ? p.vote_count : (typeof p.votes === 'number' ? p.votes : 0),
+    // In legacy schema these columns don't exist; default to not finalized and active
+    is_finalized: !!(p.is_finalized ?? false),
+    active: !!(p.active ?? true),
+    created_at: p.created_at
+  }))
+  // Keep active first, then by created_at asc even for legacy-normalized rows
+  .sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
   // Identify the leader-proposed motto proposal id when available
   const leaderProposalId =
     leaderMemberId
-      ? (proposals.find(p => p.proposed_by_member_id === leaderMemberId)?.id ?? null)
+      ? (normalized.find(p => p.proposed_by_member_id === leaderMemberId)?.id ?? null)
       : null;
 
   return NextResponse.json({
     partyId: party.id,
     partyMotto: party.motto ?? null,
-    proposals: proposals ?? [],
+    proposals: normalized,
     myVoteProposalId,
     leaderProposalId,
   });
