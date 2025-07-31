@@ -440,13 +440,7 @@ export default function PartyLobbyPage() {
     });
   };
 
-  const handleFinalizeName = async (proposalId: string) => {
-    await fetch(`/api/party/${code}/finalize-name`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposal_id: proposalId }),
-    });
-  };
+  // Finalization via majority vote only; no direct finalize endpoint used for names
 
   const handleVoteToMakeHireling = async (targetMemberId: string) => {
     if (!currentUserMember) return;
@@ -928,9 +922,8 @@ export default function PartyLobbyPage() {
               );
             }
 
-            const { proposals: memberProposals, userHasVoted, isTie, tieProposals } = getVotingStatusForMember(member.id);
+            const { proposals: memberProposals, userHasVoted } = getVotingStatusForMember(member.id);
             const canVote = currentUserMember?.id !== member.id && !userHasVoted;
-            const canBreakTie = (currentUserMember?.id === member.id || (currentUserMember?.is_leader && isTie));
 
             return (
               <div key={member.id} className="member-card">
@@ -1031,19 +1024,7 @@ export default function PartyLobbyPage() {
                 {/* Collapsible name voting/proposal area */}
                 {openNamePanels[member.id] && (
                   <div className="name-panel">
-                    {isTie && canBreakTie && (
-                      <div className="tie-breaker-card">
-                        <h4 className="tie-breaker-title">Tie-breaker!</h4>
-                        <p className="tie-breaker-text">As the one being named (or Party Leader), you must choose the final name.</p>
-                        <div className="tie-breaker-buttons">
-                          {tieProposals.map(p => (
-                            <button key={p.id} onClick={() => handleFinalizeName(p.id)} className="choose-name-button">
-                              Choose "{p.proposed_name}"
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Majority voting only; UI tie-breaker removed per PRD */}
 
                     <div className="proposals-container">
                       {memberProposals.map(p => {
