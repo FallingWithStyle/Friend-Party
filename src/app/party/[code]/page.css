@@ -154,6 +154,20 @@
   justify-content: space-between;
 }
 
+/* New header row to align status at far right */
+.member-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.member-status-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
 .member-name {
   font-size: 1.15rem;
   font-weight: 800;
@@ -386,6 +400,7 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.25rem;
+  justify-content: flex-start; /* keep subline content left-aligned */
 }
 
 /* Style for the needs-name indicator */

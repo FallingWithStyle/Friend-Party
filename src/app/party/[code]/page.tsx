@@ -927,24 +927,27 @@ export default function PartyLobbyPage() {
 
             return (
               <div key={member.id} className="member-card">
-                <h3 className="member-name">
-                  {member.first_name}{' '}
-                  {member.is_leader && (
-                    <span className="icon" role="img" aria-label="Party Leader" title="Party Leader">👑</span>
-                  )}
-                  {member.is_npc && (
-                    <span className="icon" role="img" aria-label="Hireling" title="Hireling">🛡️</span>
-                  )}
-                </h3>
-                <div className="member-subline">
-                  {/* Status badge */}
-                  <span
-                    className={`status-badge status-${(member.status || '').toLowerCase()}`}
-                    title={`Status: ${member.status || 'Unknown'}`}
-                  >
-                    {member.status || 'Unknown'}
-                  </span>
+                <div className="member-header-row">
+                  <h3 className="member-name">
+                    {member.first_name}
+                    {member.is_leader && (
+                      <span className="icon" role="img" aria-label="Party Leader" title="Party Leader">👑</span>
+                    )}
+                    {member.is_npc && (
+                      <span className="icon" role="img" aria-label="Hireling" title="Hireling">🛡️</span>
+                    )}
+                  </h3>
+                  <div className="member-status-right">
+                    <span
+                      className={`status-badge status-${(member.status || '').toLowerCase()}`}
+                      title={`Status: ${member.status || 'Unknown'}`}
+                    >
+                      {member.status || 'Unknown'}
+                    </span>
+                  </div>
+                </div>
 
+                <div className="member-subline">
                   {/* Needs-name indicator if not yet named */}
                   {!member.adventurer_name && (
                     <span className="needs-name-text">Needs a Hero Name</span>
