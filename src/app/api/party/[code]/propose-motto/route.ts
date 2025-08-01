@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } from '@/lib/morale';
 
 // Explicitly use the Node.js runtime to allow request.json() and Next headers/cookies
 export const runtime = 'nodejs';
@@ -114,8 +115,9 @@ export async function POST(
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
-      // Centralized scoring + hysteresis level resolution
-      const { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } = await import('@/lib/morale');
+      // Centralized scoring + hysteresis level resolution using defaults (no behavior change)
+      const hi = MORALE_HIGH_THRESHOLD;
+      const lo = MORALE_LOW_THRESHOLD;
       const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
 
       let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;

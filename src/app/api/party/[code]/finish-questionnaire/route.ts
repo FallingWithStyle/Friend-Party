@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { getMoraleSettings } from '@/lib/settings';
+import { computeMoraleScore, resolveMoraleLevel } from '@/lib/morale';
 
 export async function POST(
   request: Request,
@@ -126,8 +128,6 @@ export async function POST(
 
     // Recompute Party Morale after assessment status change with hysteresis
     try {
-      const { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } = await import('@/lib/morale');
-
       // 1) Members and completion
       const { data: pmRows } = await supabase
         .from('party_members')
@@ -187,7 +187,7 @@ export async function POST(
       console.warn('finish-questionnaire: updateMorale (hysteresis) skipped', e);
     }
 
-    // Recompute Party Morale after assessment status change
+    // Recompute Party Morale after assessment status change (remove legacy fallback; centralized logic already applied above)
     try {
       // 1) Members and completion rate
       const { data: pmRows } = await supabase
@@ -225,18 +225,25 @@ export async function POST(
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
-      // 4) Morale score and level based on tunables (PRD FR21–FR24)
+      // 4) Morale score and level based on admin-configured thresholds and hysteresis
       const morale = (completionRate + votingRate + proposalRate) / 3;
-      const MORALE_HIGH_THRESHOLD = 0.66;
-      const MORALE_LOW_THRESHOLD = 0.33;
 
-      let level: 'Low' | 'Neutral' | 'High' = 'Neutral';
-      if (morale >= MORALE_HIGH_THRESHOLD) level = 'High';
-      else if (morale < MORALE_LOW_THRESHOLD) level = 'Low';
+      // Use hysteresis-capable resolver; thresholds are primarily used for tie-break flows
+      const { data: prevParty2 } = await supabase
+        .from('parties')
+        .select('morale_level')
+        .eq('id', partyData.id)
+        .maybeSingle();
+      const previousLevel2 = (prevParty2?.morale_level as any) ?? null;
+
+      // Ensure settings exist (future-proofing; not directly passed to resolver yet)
+      await getMoraleSettings(supabase);
+
+      const nextLevel2 = resolveMoraleLevel(morale, previousLevel2);
 
       await supabase
         .from('parties')
-        .update({ morale_score: morale, morale_level: level })
+        .update({ morale_score: morale, morale_level: nextLevel2 })
         .eq('id', partyData.id);
     } catch (e) {
       console.warn('finish-questionnaire: updateMorale skipped', e);

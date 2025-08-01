@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD, computeMoraleScore } from '@/lib/morale';
+import { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } from '@/lib/morale';
 
 // POST /api/party/[code]/vote-motto
 // body: { proposal_id: string | null, proposal_text?: string }
@@ -243,14 +243,17 @@ export async function POST(
 
       const proposalRate = nonNpc.length ? Math.min(proposals.length / nonNpc.length, 1) : 0;
 
+      // Use centralized defaults for thresholds (feature behavior unchanged)
+      const hi = MORALE_HIGH_THRESHOLD;
+      const lo = MORALE_LOW_THRESHOLD;
       const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
 
       // Choose winner based on morale and leader's vote
       let chosen: any | null = null;
-      if (morale >= MORALE_HIGH_THRESHOLD) {
+      if (morale >= hi) {
         // High morale: leader's vote counts positively
         chosen = tied.find((p) => p.id === leaderChoiceId) ?? null;
-      } else if (morale < MORALE_LOW_THRESHOLD) {
+      } else if (morale < lo) {
         // Low morale: leader's vote counts negatively -> pick an opposing tied option
         chosen = tied.find((p) => p.id !== leaderChoiceId) ?? null;
       }
@@ -318,6 +321,7 @@ export async function POST(
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
+      // Use centralized scorer (same as earlier)
       const morale = (completionRate + votingRate + proposalRate) / 3;
 
       // Resolve previous morale level and apply hysteresis using centralized helper
@@ -332,17 +336,8 @@ export async function POST(
       } catch {}
 
       // Determine effective level with hysteresis and persist
-      const nextLevel = (() => {
-        try {
-          const { resolveMoraleLevel } = require('@/lib/morale');
-          return resolveMoraleLevel(morale, previousLevel);
-        } catch {
-          // Fallback without hysteresis if import fails
-          if (morale >= MORALE_HIGH_THRESHOLD) return 'High';
-          if (morale < MORALE_LOW_THRESHOLD) return 'Low';
-          return 'Neutral';
-        }
-      })();
+      // Resolve with hysteresis using centralized constants (no behavior change)
+      const nextLevel = resolveMoraleLevel(morale, previousLevel);
 
       await supabase
         .from('parties')

@@ -1,11 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import './HamburgerMenu.css';
+import { createClient } from '@/lib/supabase/client';
+
+const ADMIN_EMAIL = 'patrickandrewregan@gmail.com';
 
 export default function HamburgerMenu() {
+  const supabase = useMemo(() => createClient(), []);
   const [isOpen, setIsOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!mounted) return;
+        setEmail(data?.user?.email ?? null);
+      } catch {
+        if (!mounted) return;
+        setEmail(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -15,6 +37,8 @@ export default function HamburgerMenu() {
     setIsOpen(false);
   };
 
+  const isAdmin = email === ADMIN_EMAIL;
+
   return (
     <div className="hamburger-menu-container">
       <button className="hamburger-icon" onClick={toggleMenu} aria-label="Toggle menu">
@@ -23,8 +47,8 @@ export default function HamburgerMenu() {
         <div className={`bar ${isOpen ? 'open' : ''}`}></div>
       </button>
 
-      <nav className={`menu-overlay ${isOpen ? 'open' : ''}`} onClick={closeMenu}> {/* Click overlay to close */}
-        <ul className="menu-list" onClick={(e) => e.stopPropagation()}> {/* Prevent clicks inside menu from closing */}
+      <nav className={`menu-overlay ${isOpen ? 'open' : ''}`} onClick={closeMenu}>
+        <ul className="menu-list" onClick={(e) => e.stopPropagation()}>
           <li>
             <Link href="/" className="menu-link" onClick={closeMenu}>
               Home
@@ -40,6 +64,13 @@ export default function HamburgerMenu() {
               Attributions
             </Link>
           </li>
+          {isAdmin && (
+            <li>
+              <Link href="/admin" className="menu-link" onClick={closeMenu}>
+                Admin
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
     </div>
