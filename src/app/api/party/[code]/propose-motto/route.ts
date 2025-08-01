@@ -76,7 +76,7 @@ export async function POST(
 
     const proposal = inserted;
 
-    // Update Party Morale after proposal creation (participation-based)
+    // Update Party Morale after proposal creation (participation-based) with hysteresis
     try {
       // 1) Members and completion rate
       const { data: pmRows } = await supabase
@@ -100,7 +100,7 @@ export async function POST(
       const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
       const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
 
-      // 3) Voting rate (distinct non-NPC voters who voted on any active proposal)
+      // 3) Voting rate (distinct non-NPC voters on any active proposal)
       let votingRate = 0;
       if (activeProposalIds.length > 0) {
         const { data: votes } = await supabase
@@ -114,17 +114,25 @@ export async function POST(
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
-      // 4) Morale score and level
-      const morale = (completionRate + votingRate + proposalRate) / 3;
-      const MORALE_HIGH_THRESHOLD = 0.66;
-      const MORALE_LOW_THRESHOLD = 0.33;
-      let level: 'Low' | 'Neutral' | 'High' = 'Neutral';
-      if (morale >= MORALE_HIGH_THRESHOLD) level = 'High';
-      else if (morale < MORALE_LOW_THRESHOLD) level = 'Low';
+      // Centralized scoring + hysteresis level resolution
+      const { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } = await import('@/lib/morale');
+      const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
+
+      let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
+      try {
+        const { data: prevParty } = await supabase
+          .from('parties')
+          .select('morale_level')
+          .eq('id', party.id)
+          .maybeSingle();
+        previousLevel = (prevParty?.morale_level as any) ?? null;
+      } catch {}
+
+      const nextLevel = resolveMoraleLevel(morale, previousLevel);
 
       await supabase
         .from('parties')
-        .update({ morale_score: morale, morale_level: level })
+        .update({ morale_score: morale, morale_level: nextLevel })
         .eq('id', party.id);
     } catch (moraleErr) {
       console.warn('propose-motto: updateMorale skipped:', moraleErr);

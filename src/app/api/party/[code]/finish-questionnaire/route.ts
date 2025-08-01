@@ -124,6 +124,69 @@ export async function POST(
       }
     }
 
+    // Recompute Party Morale after assessment status change with hysteresis
+    try {
+      const { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } = await import('@/lib/morale');
+
+      // 1) Members and completion
+      const { data: pmRows } = await supabase
+        .from('party_members')
+        .select('id, is_npc, assessment_status')
+        .eq('party_id', partyData.id);
+
+      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
+      const finished = nonNpc.filter(
+        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
+      );
+      const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
+
+      // 2) Active proposals
+      const { data: activeProps } = await supabase
+        .from('party_motto_proposals')
+        .select('id, active')
+        .eq('party_id', partyData.id)
+        .eq('active', true);
+
+      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
+
+      // 3) Voting rate
+      let votingRate = 0;
+      if (activeProposalIds.length > 0) {
+        const { data: votes } = await supabase
+          .from('party_motto_votes')
+          .select('voter_member_id')
+          .in('proposal_id', activeProposalIds);
+
+        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
+        votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
+      }
+
+      const score = computeMoraleScore({ completionRate, votingRate, proposalRate });
+
+      // Fetch previous level and resolve with hysteresis
+      let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
+      try {
+        const { data: prevParty } = await supabase
+          .from('parties')
+          .select('morale_level')
+          .eq('id', partyData.id)
+          .maybeSingle();
+        previousLevel = (prevParty?.morale_level as any) ?? null;
+      } catch {}
+
+      const nextLevel = resolveMoraleLevel(score, previousLevel);
+
+      await supabase
+        .from('parties')
+        .update({ morale_score: score, morale_level: nextLevel })
+        .eq('id', partyData.id);
+    } catch (e) {
+      console.warn('finish-questionnaire: updateMorale (hysteresis) skipped', e);
+    }
+
     // Recompute Party Morale after assessment status change
     try {
       // 1) Members and completion rate

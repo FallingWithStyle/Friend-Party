@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD, computeMoraleScore } from '@/lib/morale';
 
 // POST /api/party/[code]/vote-motto
 // body: { proposal_id: string | null, proposal_text?: string }
@@ -210,12 +211,9 @@ export async function POST(
         leaderVotes && leaderVotes.length > 0 ? (leaderVotes[0].proposal_id as string) : null;
       if (!leaderChoiceId) return;
 
-      // Tunables
-      const MORALE_HIGH_THRESHOLD = 0.66;
-      const MORALE_LOW_THRESHOLD = 0.33;
+      // Tunables are imported at top (centralized)
 
-      // Compute Party Morale score [0..1] based on participation signals
-      // completionRate: fraction of non-NPC with PeerAssessmentCompleted
+      // Compute Party Morale score [0..1] based on participation signals (centralized)
       const { data: pmRows } = await supabase
         .from('party_members')
         .select('id, is_npc, assessment_status')
@@ -226,10 +224,10 @@ export async function POST(
       );
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
-      // votingRate: distinct non-NPC voters participating / non-NPC eligible
       const { data: allVotes } = await supabase
         .from('party_motto_votes')
         .select('voter_member_id, proposal_id');
+
       let votingRate = 0;
       if (allVotes && allVotes.length > 0) {
         const proposalIds = proposals.map((p) => p.id);
@@ -243,10 +241,9 @@ export async function POST(
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
-      // proposalRate: active proposals per eligible (clamped)
       const proposalRate = nonNpc.length ? Math.min(proposals.length / nonNpc.length, 1) : 0;
 
-      const morale = (completionRate + votingRate + proposalRate) / 3;
+      const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
 
       // Choose winner based on morale and leader's vote
       let chosen: any | null = null;
@@ -323,17 +320,33 @@ export async function POST(
 
       const morale = (completionRate + votingRate + proposalRate) / 3;
 
-      // Tunables aligned with PRD FR21–FR24
-      const MORALE_HIGH_THRESHOLD = 0.66;
-      const MORALE_LOW_THRESHOLD = 0.33;
+      // Resolve previous morale level and apply hysteresis using centralized helper
+      let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
+      try {
+        const { data: prevParty } = await supabase
+          .from('parties')
+          .select('morale_level')
+          .eq('id', party.id)
+          .maybeSingle();
+        previousLevel = (prevParty?.morale_level as any) ?? null;
+      } catch {}
 
-      let level: 'Low' | 'Neutral' | 'High' = 'Neutral';
-      if (morale >= MORALE_HIGH_THRESHOLD) level = 'High';
-      else if (morale < MORALE_LOW_THRESHOLD) level = 'Low';
+      // Determine effective level with hysteresis and persist
+      const nextLevel = (() => {
+        try {
+          const { resolveMoraleLevel } = require('@/lib/morale');
+          return resolveMoraleLevel(morale, previousLevel);
+        } catch {
+          // Fallback without hysteresis if import fails
+          if (morale >= MORALE_HIGH_THRESHOLD) return 'High';
+          if (morale < MORALE_LOW_THRESHOLD) return 'Low';
+          return 'Neutral';
+        }
+      })();
 
       await supabase
         .from('parties')
-        .update({ morale_score: morale, morale_level: level })
+        .update({ morale_score: morale, morale_level: nextLevel })
         .eq('id', party.id);
     } catch (e: any) {
       console.warn('updateMorale skipped:', e?.message ?? e);
