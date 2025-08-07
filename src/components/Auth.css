@@ -1,0 +1,35 @@
+.auth-container {
+  padding: 1rem;
+}
+
+.auth-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-input {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+}
+
+.auth-button {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 0.5rem 1rem;
+  border: none;
+  cursor: pointer;
+}
+
+.auth-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.logout-button {
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
+  padding: 0.5rem 1rem;
+  border: none;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}

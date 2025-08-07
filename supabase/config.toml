@@ -1,0 +1,11 @@
+# Supabase project configuration
+
+[db]
+
+[api]
+# The API port is used for local development
+port = 54321
+
+[functions.calculate-results]
+import_map = "./deno.json"
+entrypoint = "./functions/calculate-results/index.ts"

@@ -1,0 +1,116 @@
+.home-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.home-title {
+  font-size: 4.5rem;
+  color: var(--primary);
+  margin-bottom: 2rem; /* Added margin-bottom */
+}
+
+.home-divider {
+  width: 8rem;
+  height: 1px;
+  background-color: var(--border);
+  margin: 1.5rem 0;
+}
+
+.home-subtitle {
+  font-size: 1.5rem;
+  color: var(--muted);
+  margin-bottom: 3rem;
+}
+
+.home-link {
+  font-size: 2rem;
+  color: var(--primary);
+  margin-bottom: 2rem; /* Adjusted margin-bottom */
+  text-decoration: none;
+}
+
+.home-join-text {
+  font-size: 1.125rem;
+  color: var(--muted);
+  margin-top: 2rem; /* Added margin-top */
+  margin-bottom: 1rem;
+}
+
+.home-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.home-input {
+  width: 14rem;
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+}
+
+.home-input::placeholder {
+  color: var(--muted);
+}
+
+.home-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--secondary);
+}
+
+.home-button {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 0.75rem 1.5rem;
+  border: none;
+  cursor: pointer;
+  height: 100%;
+}
+
+.magic-link-section {
+  margin-bottom: 2rem; /* Added margin-bottom for magic link section */
+}
+
+.home-parties {
+  margin-top: 2rem; /* Added margin-top for parties section */
+}
+
+.home-footer-divider {
+  width: 6rem;
+  height: 1px;
+  background-color: var(--border);
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+}
+
+.home-footer-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.party-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* Spacing between party items */
+  margin-top: 1rem;
+}
+
+.party-list-item {
+  padding: 0.25rem 0;
+}
+
+.party-list-item a {
+  color: var(--primary); /* Link color */
+  text-decoration: none;
+  font-size: 1.125rem;
+}
+
+.party-list-item a:hover {
+  text-decoration: underline;
+}

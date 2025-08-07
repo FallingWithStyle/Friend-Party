@@ -1,0 +1,43 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "db:reset"],
+			"problemMatcher": [],
+			"label": "npm: db:reset",
+			"detail": "supabase db reset",
+			"group": "build"
+		},
+		{
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "dev"],
+			"problemMatcher": [],
+			"label": "npm: dev",
+			"detail": "next dev",
+			"group": "build",
+			"isBackground": true
+		},
+		{
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "build"],
+			"problemMatcher": [],
+			"label": "npm: build",
+			"detail": "next build",
+			"group": "build"
+		},
+		{
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "start"],
+			"problemMatcher": [],
+			"label": "npm: start",
+			"detail": "next start",
+			"group": "build",
+			"isBackground": true
+		}
+	]
+}

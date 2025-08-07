@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Garamond&display=swap');
+
+:root {
+  --background: #F5DEB3;
+  --foreground: #3A241D;
+  --card: #D2B48C;
+  --card-foreground: #3A241D;
+  --popover: #D2B48C;
+  --popover-foreground: #3A241D;
+  --primary: #8B0000;
+  --primary-foreground: #F5DEB3;
+  --secondary: #00008B;
+  --secondary-foreground: #F5DEB3;
+  --muted: #6F4E37;
+  --muted-foreground: #6F4E37;
+  --accent: #556B2F;
+  --accent-foreground: #F5DEB3;
+  --destructive: #8B0000;
+  --destructive-foreground: #F5DEB3;
+  --border: #855E42;
+  --input: #855E42;
+  --ring: #00008B;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Garamond', serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'IM Fell English SC', serif;
+}

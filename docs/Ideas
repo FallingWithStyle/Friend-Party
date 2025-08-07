@@ -1,0 +1,30 @@
+Ideas to add to the dev docs
+
+Users get EXP by answering questions. EXP doesn't do anything but it shows on their profile.
+
+Party members can suggest renames for the party name. This would trigger an event where other members can vote on the new name or propose their own alternatives, similar to how they vote on member stats.
+
+Add a direct Join Party URL for new users using the 6-letter code for easier joining. Make this available to quickly and easily copy/paste with a single click from within the party screen
+
+Add magic link front and center on the main landing page, beneath "Gather your allies, assess your bonds, and reveal your party's true nature."
+
+If someone signs in using magic link or discord, allow them to save their preferred name, and auto-fill it for them.
+
+If I've already filled out my name once for a given party, and I am signed in with the same account, and I go to re-enter that same party, don't ask for my email again
+
+If I've already completed both assessments, I should be able to go to the results from within the party screen's navigation options. Otherwise, add a link to take me to where I left off in the assessment.
+
+Hide the "Propose a name" dialogue until users click "Needs an adventurer name!" next to the player's existing name. At that point, users should be able to either propose a new name or vote on existing suggested names (the options should appear below).
+
+Display each user's task status below their names.
+
+Set up special invite processes for email and discord.
+
+Allow users to vote at a certain point to turn invitees into "hirelings" or deleting them from the party in order to allow the party to proceed.
+
+
+MINI GAME IDEAS:
+
+1) FLOPPY HIRELING - party must work together to bounce the hireling like a volleyball over obstacles and get them to the finish line, sort of like flappy bird
+2) DRAGON'S HOARD - party members take turns distributing loot from the dragon's hoard to other members of the party. Loot always has weird or funny effects
+3) ??? - party must create avatars for their fellow party members, one step at a time. First player might pick head shape, then the next player might pick nose, and the next might pick hair, etc.
