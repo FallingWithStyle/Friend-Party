@@ -67,10 +67,22 @@ export async function getMoraleSettings(supabase?: Awaited<ReturnType<typeof cre
     map.set(row.key, row.value);
   }
 
+  const getNumber = (raw: unknown, fallback: number): number => {
+    if (typeof raw === 'number') return raw;
+    if (raw && typeof raw === 'object' && 'value' in (raw as Record<string, unknown>)) {
+      const v = (raw as { value?: unknown }).value;
+      if (typeof v === 'number') return v;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+    const n = Number(raw as unknown as number);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
   const parsed: Partial<MoraleSettings> = {
-    high: Number(map.get('morale.high_threshold')?.value ?? defaults.high),
-    low: Number(map.get('morale.low_threshold')?.value ?? defaults.low),
-    hysteresis: Number(map.get('morale.hysteresis')?.value ?? defaults.hysteresis),
+    high: getNumber(map.get('morale.high_threshold'), defaults.high),
+    low: getNumber(map.get('morale.low_threshold'), defaults.low),
+    hysteresis: getNumber(map.get('morale.hysteresis'), defaults.hysteresis),
   };
 
   const normalized = normalizeSettings(parsed);

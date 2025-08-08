@@ -27,6 +27,8 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     const [_partyId, setPartyId] = useState<string | null>(null);
     const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
     const [loading, setLoading] = useState(true);
+    const [partyMotto, setPartyMotto] = useState<string | null>(null);
+    const [partyMorale, setPartyMorale] = useState<{ score: number | null; level: string | null }>({ score: null, level: null });
     type WaitingMember = { first_name: string; assessment_status?: string };
     const [waitingOn, setWaitingOn] = useState<WaitingMember[]>([]);
     const [isCalculating, setIsCalculating] = useState(false);

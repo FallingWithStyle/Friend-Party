@@ -146,7 +146,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     if (!currentUserMember) return;
     setIsSubmitting(true);
 
-    const answersToSubmit: Array<{ question_id: string; voter_member_id: string; subject_member_id: string; answer_value: string }> = [];
+    let answersToSubmit: Array<{ question_id: string; voter_member_id: string; subject_member_id: string; answer_value: string }> = [];
     if (questionType === 'self-assessment') {
       answersToSubmit = Object.entries(finalAnswers).map(([questionId, answerValue]) => ({
         question_id: questionId,
@@ -248,6 +248,13 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     <>
       {isSubmitting && <LoadingSpinner />}
       <div className="questionnaire-card">
+        <div className="guidance-note" aria-live="polite">
+          <div className="guidance-title">Not sure how to answer?</div>
+          <p className="guidance-body">
+            Imagine you and your friends suddenly step into a fantasy realm. Use your real-life strengths as your
+            character’s stats, and answer each question as if you needed those abilities to survive and help your party.
+          </p>
+        </div>
         <div className="question-header">
           <h2 className="question-title">
             Question {currentQuestionIndex + 1} of {questions.length}

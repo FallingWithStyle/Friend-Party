@@ -41,8 +41,11 @@ export default function Home() {
             throw error;
           }
 
-          const parties = partyMembers?.map((pm: { party?: Party }) => pm.party).filter(Boolean) || [];
-          setJoinedParties(parties as Party[]);
+          const parties = (partyMembers || []).flatMap((pm: { party?: Party | Party[] }) => {
+            const party = Array.isArray(pm.party) ? pm.party[0] : pm.party;
+            return party ? [party] : [];
+          });
+          setJoinedParties(parties);
 
         } catch (error) {
           console.error('Failed to fetch joined parties:', error);

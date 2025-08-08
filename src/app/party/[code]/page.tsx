@@ -19,6 +19,7 @@ interface Member {
   status: string;
   adventurer_name: string | null;
   is_npc: boolean; // Add is_npc property
+  exp?: number; // Optional EXP for display
 }
 
 interface NameProposal {
@@ -182,10 +183,10 @@ export default function PartyLobbyPage() {
     // Align channel with backend broadcasts which use `party-${code}`
     const channel = supabase.channel(`party-${code}`);
 
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: Member; old: Member }) => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload) => {
       if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
       if (payload.eventType === 'UPDATE') setMembers(current => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
-    }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: NameProposal; old: NameProposal }) => {
+    }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload) => {
       if (payload.eventType === 'INSERT') {
         const np = payload.new as NameProposal;
         setProposals(current => {
@@ -213,19 +214,19 @@ export default function PartyLobbyPage() {
           setProposals(current => current.map(p => p.id === updated.id ? updated : p));
         }
       }
-    }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload: { new: NameProposalVote }) => {
+    }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload) => {
       setVotes(current => [...current, payload.new as NameProposalVote]);
     })
     // Motto proposals and votes realtime
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: { id: string; text?: string | null; vote_count?: number | null; is_finalized?: boolean | null; active?: boolean | null }; old: { id: string } }) => {
-      const row = payload.new;
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload) => {
       if (payload.eventType === 'INSERT') {
+        const row = (payload as unknown as { new: { id: string; text?: string | null; vote_count?: number | null; is_finalized?: boolean | null; active?: boolean | null } }).new;
         // Merge-safe: replace optimistic placeholder (id starts with 'optimistic-')
         setMottoProposals(curr => {
           // If we already have this canonical id, upsert/update
           if (curr.some(p => p.id === row.id)) {
             return curr.map(p => p.id === row.id
-              ? { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
+              ? { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
               : p);
           }
           // Try to find an optimistic item with the same text OR a close match of trimmed/lowercased text
@@ -236,23 +237,24 @@ export default function PartyLobbyPage() {
           );
           if (idx >= 0) {
             const copy = curr.slice();
-            copy[idx] = { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active };
+            copy[idx] = { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active };
             return copy;
           }
           // Otherwise append canonical
           return [
             ...curr,
-            { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
+            { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active }
           ];
         });
       } else if (payload.eventType === 'UPDATE') {
-         setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
-         if (row.is_finalized) setPartyMotto(row.text ?? '');
+        const row = (payload as unknown as { new: { id: string; text?: string | null; vote_count?: number | null; is_finalized?: boolean | null; active?: boolean | null } }).new;
+        setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
+        if (row.is_finalized) setPartyMotto(row.text ?? '');
       } else if (payload.eventType === 'DELETE') {
         setMottoProposals(curr => curr.filter(p => p.id !== payload.old.id));
       }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload: unknown) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload) => {
       // Soft re-sync vote state, but preserve optimistic placeholders if present
       fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
         .then(async r => {
@@ -323,8 +325,8 @@ export default function PartyLobbyPage() {
           table: 'parties',
           filter: `id=eq.${party.id}`,
         },
-        (payload: { new?: { status?: string } }) => {
-          const newStatus = payload?.new?.status;
+        (payload) => {
+          const newStatus = (payload as { new?: { status?: string } })?.new?.status;
           if (newStatus === 'Results' || newStatus === 'ResultsReady') {
             router.push(`/party/${code}/results`);
           }
@@ -409,10 +411,10 @@ export default function PartyLobbyPage() {
   // Switch my vote to a different proposal for the same target (optimistic; realtime will reconcile)
   const handleChangeVote = async (proposalId: string) => {
     const _target = proposals.find((p) => p.id === proposalId)?.target_member_id;
-    if (!currentUserMember || !target) return;
+    if (!currentUserMember || !_target) return;
 
     setVotes((prev) => {
-      const idsForTarget = proposals.filter(p => p.target_member_id === target).map(p => p.id);
+      const idsForTarget = proposals.filter(p => p.target_member_id === _target).map(p => p.id);
       const withoutMine = prev.filter(
         (v) => v.voter_member_id !== currentUserMember.id || !idsForTarget.includes(v.proposal_id)
       );
@@ -618,9 +620,9 @@ export default function PartyLobbyPage() {
         setMottoProposals((prev) => prev.filter((p) => p.id !== tempId));
         console.error('Failed to propose motto');
       }
-    } catch {
+    } catch (err) {
       // Network or unexpected error: keep optimistic until realtime/next fetch arrives
-      console.error('Failed to propose motto', e);
+      console.error('Failed to propose motto', err);
     }
   };
 
