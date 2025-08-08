@@ -415,9 +415,9 @@ This document is now ready for the next phase of the project. The following prom
 ## 14. Appendix: Database Schema Alignment for Party Motto Proposals
 
 Context
-- Two schema variants for party_motto_proposals currently exist in the repo:
-  - Legacy (defined in database/init.sql): columns proposing_member_id, proposed_motto, votes
-  - New (defined in database/migrations/20250731160000_add_party_motto_proposals_and_votes.sql): columns proposed_by_member_id, text, vote_count, is_finalized, active
+- Party motto schema unified to the “New” model across code and database:
+  - Canonical: `party_motto_proposals` (proposed_by_member_id, text, vote_count, is_finalized, active) and `party_motto_votes`
+  - `init.sql` and APIs updated; no legacy-column fallbacks remain
 
 Problem
 - Environments initialized with init.sql create the legacy columns, while environments applying the newer migration expect the new columns.
@@ -428,17 +428,16 @@ Interim Solution Implemented
   - Inserts attempt the new columns first; if PostgREST returns PGRST204 (missing column), fall back to legacy columns.
   - Reads select with aliases and normalize to a unified shape for the frontend.
 
-Recommended Path to Unify
-- Adopt the “New” schema (proposed_by_member_id, text, vote_count, is_finalized, active) as canonical for richer state and clearer naming.
-- Update or remove legacy definitions in database/init.sql to prevent drift.
+Unification Status
+- New schema adopted and applied in APIs (`propose-motto`, `vote-motto`, `mottos`, `finalize-motto`).
+- `init.sql` defines normalized tables and RLS; triggers maintain `vote_count`.
 
-Operational Guidance to Migrate
-1) Ensure migration execution
-   - Run 20250731160000_add_party_motto_proposals_and_votes.sql on all environments.
+Operational Notes
+1) Ensure migration execution in non-local environments
+   - Run `20250731160000_add_party_motto_proposals_and_votes.sql`.
 
-2) Reconcile existing legacy tables
-   - If party_motto_proposals exists with legacy columns, perform these changes (example SQL):
-     - ALTER TABLE public.party_motto_proposals RENAME COLUMN proposing_member_id TO proposed_by_member_id;
+2) If an environment still has legacy columns, apply ALTERs accordingly
+   - Example: `ALTER TABLE public.party_motto_proposals RENAME COLUMN proposing_member_id TO proposed_by_member_id;`
      - ALTER TABLE public.party_motto_proposals RENAME COLUMN proposed_motto TO text;
      - ALTER TABLE public.party_motto_proposals RENAME COLUMN votes TO vote_count;
      - ALTER TABLE public.party_motto_proposals ADD COLUMN IF NOT EXISTS is_finalized BOOLEAN NOT NULL DEFAULT FALSE;

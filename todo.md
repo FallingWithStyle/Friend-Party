@@ -13,12 +13,12 @@ Legend:
 - [ ] Release preparation: cleanup unused/redundant files per checklist (PRD §12)
 
 ## Database Schema Alignment (Party Motto Proposals) — PRD §13
-- [ ] Adopt “New” schema as canonical (proposed_by_member_id, text, vote_count, is_finalized, active)
+- [x] Adopt “New” schema as canonical (proposed_by_member_id, text, vote_count, is_finalized, active)
 - [ ] Ensure migration 20250731160000_add_party_motto_proposals_and_votes.sql is applied on all envs
-- [ ] Reconcile legacy columns to new names (ALTER TABLE renames; add is_finalized, active)
-- [ ] Update RLS policies to reference proposed_by_member_id
-- [ ] Update database/init.sql to match new schema and remove legacy/duplicate blocks
-- [ ] After unification, remove dual-path insert/select in:
+- [x] Reconcile legacy columns to new names (ALTER TABLE renames; add is_finalized, active)
+- [x] Update RLS policies to reference proposed_by_member_id
+- [x] Update database/init.sql to match new schema and remove legacy/duplicate blocks
+- [x] After unification, remove dual-path insert/select in:
   - friend-party-app/src/app/api/party/[code]/propose-motto/route.ts
   - friend-party-app/src/app/api/party/[code]/mottos/route.ts
 - [ ] Acceptance: All envs use new columns; init.sql + migrations consistent; API fallbacks removed
