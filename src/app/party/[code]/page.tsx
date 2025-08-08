@@ -157,18 +157,23 @@ export default function PartyLobbyPage() {
          console.warn('Failed to load mottos:', e);
        }
 
-       const { data: hirelingVoteData, error: hirelingVoteError } = await supabase
-         .from('hireling_conversion_votes')
-         .select('party_member_id_being_voted_on, vote');
-       if (hirelingVoteError) console.error('Error fetching hireling votes:', hirelingVoteError);
-       if (hirelingVoteData) {
+       // Limit initial hireling vote counts to members of this party
+       const memberIds = (memberData ?? []).map((m: { id: string }) => m.id);
+       if (memberIds.length > 0) {
+         const { data: hirelingVoteData, error: hirelingVoteError } = await supabase
+           .from('hireling_conversion_votes')
+           .select('party_member_id_being_voted_on, vote')
+           .in('party_member_id_being_voted_on', memberIds);
+         if (hirelingVoteError) console.error('Error fetching hireling votes:', hirelingVoteError);
+         if (hirelingVoteData) {
           const initialCounts = hirelingVoteData.reduce((acc: { [key: string]: number }, row: { party_member_id_being_voted_on: string; vote: boolean }) => {
            if (row.vote) {
              acc[row.party_member_id_being_voted_on] = (acc[row.party_member_id_being_voted_on] || 0) + 1;
            }
            return acc;
          }, {});
-         setHirelingVoteCountsMap(initialCounts);
+           setHirelingVoteCountsMap(initialCounts);
+         }
        }
      };
 
