@@ -12,7 +12,7 @@ export const UserInfoHandler = () => {
   const [nameVerified, setNameVerified] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const currentMember = members.find((member: any) => member.user_id === user?.id);
+  const currentMember = members.find((member: { user_id: string }) => member.user_id === user?.id);
 
   useEffect(() => {
     setMounted(true);

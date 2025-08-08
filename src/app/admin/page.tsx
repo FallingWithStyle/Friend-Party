@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 type MoraleSettings = {
   high: number;
@@ -90,9 +89,10 @@ export default function AdminSettingsPage() {
           low: typeof data.low === 'number' ? data.low : 0.33,
           hysteresis: typeof data.hysteresis === 'number' ? data.hysteresis : 0.05,
         });
-      } catch (e: any) {
+      } catch (e) {
         if (!mounted) return;
-        setFetchError(e?.message ?? 'Failed to fetch settings');
+        const message = e instanceof Error ? e.message : 'Failed to fetch settings';
+        setFetchError(message);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -141,8 +141,9 @@ export default function AdminSettingsPage() {
         hysteresis: j.hysteresis,
       });
       setSaveSuccess('Saved');
-    } catch (e: any) {
-      setSaveError(e?.message ?? 'Save failed');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Save failed';
+      setSaveError(message);
     } finally {
       setSaving(false);
     }

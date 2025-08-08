@@ -7,7 +7,6 @@ export const metadata: Metadata = {
   description: "Discover your friends' inner adventurers",
 };
 
-import Link from 'next/link';
 import HamburgerMenu from '@/components/HamburgerMenu'; // Import the new component
 import { DebugToolbar } from '@/components/DebugToolbar'; // Import DebugToolbar
 

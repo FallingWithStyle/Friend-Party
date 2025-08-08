@@ -50,7 +50,7 @@ export async function getMoraleSettings(supabase?: Awaited<ReturnType<typeof cre
   const { data, error } = await client
     .from('app_settings')
     .select('key, value')
-    .in('key', keys as any);
+    .in('key', keys as string[]);
 
   const defaults: MoraleSettings = {
     high: MORALE_HIGH_THRESHOLD,
@@ -62,7 +62,7 @@ export async function getMoraleSettings(supabase?: Awaited<ReturnType<typeof cre
     return defaults;
   }
 
-  const map = new Map<string, any>();
+  const map = new Map<string, unknown>();
   for (const row of data) {
     map.set(row.key, row.value);
   }

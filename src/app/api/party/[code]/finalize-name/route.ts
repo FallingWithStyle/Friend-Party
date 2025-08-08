@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const { code } = params;
+  const { code: _code } = (await params) as { code: string };
 
   const {
     data: { user },

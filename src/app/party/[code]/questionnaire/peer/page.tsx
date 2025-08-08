@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import './page.css';
 
 export default function PeerAssessmentPage() {
-  const router = useRouter();
+  const _router = useRouter();
   const params = useParams();
   const code = params.code as string;
   const { party, getPartyByCode, members, user } = usePartyStore();

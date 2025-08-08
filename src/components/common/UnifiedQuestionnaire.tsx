@@ -146,7 +146,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     if (!currentUserMember) return;
     setIsSubmitting(true);
 
-    let answersToSubmit: any[] = [];
+    const answersToSubmit: Array<{ question_id: string; voter_member_id: string; subject_member_id: string; answer_value: string }> = [];
     if (questionType === 'self-assessment') {
       answersToSubmit = Object.entries(finalAnswers).map(([questionId, answerValue]) => ({
         question_id: questionId,

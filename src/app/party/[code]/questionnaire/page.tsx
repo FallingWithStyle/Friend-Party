@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function SelfAssessmentPage() {
-  const router = useRouter();
+  const _router = useRouter();
   const params = useParams();
   const code = params.code as string;
   const { party, getPartyByCode } = usePartyStore();
@@ -17,7 +17,8 @@ export default function SelfAssessmentPage() {
     if (!party?.code && code) {
       getPartyByCode(code);
     }
-  }, [code, getPartyByCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
 
   if (!code) {
     return <div>Loading...</div>;

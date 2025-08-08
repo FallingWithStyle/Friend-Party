@@ -88,16 +88,16 @@ export default function PartyLobbyPage() {
     }
     return map;
   }, [votes, proposals, currentUserMember]);
-  const [assessmentsCompleted, setAssessmentsCompleted] = useState(false);
+  const [_assessmentsCompleted, setAssessmentsCompleted] = useState(false);
   // Expand/collapse per-member name panel (single declaration)
   const [openNamePanels, setOpenNamePanels] = useState<Record<string, boolean>>({});
   // Toggle for showing Hireling vote panel per member
   const [openHirelingPanels, setOpenHirelingPanels] = useState<Record<string, boolean>>({});
 
   // Add these at the top level
-  const [selfCompleted, setSelfCompleted] = useState(false);
-  const [peerCompleted, setPeerCompleted] = useState(false);
-  const [peerAssessmentLoading, setPeerAssessmentLoading] = useState(false);
+  const [_selfCompleted, setSelfCompleted] = useState(false);
+  const [_peerCompleted, setPeerCompleted] = useState(false);
+  const [_peerAssessmentLoading, _setPeerAssessmentLoading] = useState(false);
   // Expand/collapse per-member name panel (single source of truth)
 
   // --- Effects ---
@@ -116,7 +116,7 @@ export default function PartyLobbyPage() {
       }
     };
     if (party && !userLoading) fetchUserMember(); // Fetch when party is loaded and user loading is complete
-  }, [party, user, userLoading, supabase, router]); // Add user, userLoading, router to dependencies
+  }, [party, user, userLoading, supabase, router]); // Dependencies
 
   useEffect(() => {
     if (!party) return;
@@ -137,8 +137,8 @@ export default function PartyLobbyPage() {
          if (resp.ok) {
            const json = await resp.json();
            setPartyMotto(json.partyMotto ?? null);
-           setMottoProposals((json.proposals ?? []).map((p: any) => ({
-             id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+           setMottoProposals((json.proposals ?? []).map((p: { id: string; text?: string | null; vote_count?: number; is_finalized?: boolean; active?: boolean }) => ({
+             id: p.id, text: p.text ?? '', vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
            })));
            setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
            setPartyMorale({
@@ -146,7 +146,7 @@ export default function PartyLobbyPage() {
              level: typeof json.moraleLevel === 'string' ? json.moraleLevel : null
            });
            // stash leader proposal id for UI pinning
-           (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+           (window as unknown as { __leaderProposalId?: string }).__leaderProposalId = json.leaderProposalId ?? null;
          } else if (resp.status === 401 || resp.status === 403) {
            // Ignore unauthorized/forbidden to avoid wiping optimistic state
          } else {
@@ -162,7 +162,7 @@ export default function PartyLobbyPage() {
          .select('party_member_id_being_voted_on, vote');
        if (hirelingVoteError) console.error('Error fetching hireling votes:', hirelingVoteError);
        if (hirelingVoteData) {
-         const initialCounts = hirelingVoteData.reduce((acc: { [key: string]: number }, row: any) => {
+          const initialCounts = hirelingVoteData.reduce((acc: { [key: string]: number }, row: { party_member_id_being_voted_on: string; vote: boolean }) => {
            if (row.vote) {
              acc[row.party_member_id_being_voted_on] = (acc[row.party_member_id_being_voted_on] || 0) + 1;
            }
@@ -177,10 +177,10 @@ export default function PartyLobbyPage() {
     // Align channel with backend broadcasts which use `party-${code}`
     const channel = supabase.channel(`party-${code}`);
 
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload: any) => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: Member; old: Member }) => {
       if (payload.eventType === 'INSERT') setMembers(current => [...current, payload.new as Member]);
       if (payload.eventType === 'UPDATE') setMembers(current => current.map(m => m.id === (payload.new as Member).id ? (payload.new as Member) : m));
-    }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
+    }).on('postgres_changes', { event: '*', schema: 'public', table: 'name_proposals', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: NameProposal; old: NameProposal }) => {
       if (payload.eventType === 'INSERT') {
         const np = payload.new as NameProposal;
         setProposals(current => {
@@ -208,11 +208,11 @@ export default function PartyLobbyPage() {
           setProposals(current => current.map(p => p.id === updated.id ? updated : p));
         }
       }
-    }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload: any) => {
+    }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'name_proposal_votes' }, (payload: { new: NameProposalVote }) => {
       setVotes(current => [...current, payload.new as NameProposalVote]);
     })
     // Motto proposals and votes realtime
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload: any) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_proposals', filter: `party_id=eq.${party.id}` }, (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: { id: string; text?: string | null; vote_count?: number | null; is_finalized?: boolean | null; active?: boolean | null }; old: { id: string } }) => {
       const row = payload.new;
       if (payload.eventType === 'INSERT') {
         // Merge-safe: replace optimistic placeholder (id starts with 'optimistic-')
@@ -224,7 +224,7 @@ export default function PartyLobbyPage() {
               : p);
           }
           // Try to find an optimistic item with the same text OR a close match of trimmed/lowercased text
-          const norm = (s: any) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+           const norm = (s: unknown) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
           const idx = curr.findIndex(p =>
             p.id.startsWith('optimistic-') &&
             (norm(p.text) === norm(row.text))
@@ -241,13 +241,13 @@ export default function PartyLobbyPage() {
           ];
         });
       } else if (payload.eventType === 'UPDATE') {
-        setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text, vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
-        if (row.is_finalized) setPartyMotto(row.text);
+         setMottoProposals(curr => curr.map(p => p.id === row.id ? { id: row.id, text: row.text ?? '', vote_count: row.vote_count ?? 0, is_finalized: !!row.is_finalized, active: !!row.active } : p));
+         if (row.is_finalized) setPartyMotto(row.text ?? '');
       } else if (payload.eventType === 'DELETE') {
         setMottoProposals(curr => curr.filter(p => p.id !== payload.old.id));
       }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload: any) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'party_motto_votes' }, (_payload: unknown) => {
       // Soft re-sync vote state, but preserve optimistic placeholders if present
       fetch(`/api/party/${code}/mottos`, { cache: 'no-store' })
         .then(async r => {
@@ -258,10 +258,10 @@ export default function PartyLobbyPage() {
         })
         .then(json => {
           if (!json) return;
-          const incoming: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }[] =
-            (json.proposals ?? []).map((p: any) => ({
+           const incoming: { id: string; text: string; vote_count: number; is_finalized: boolean; active: boolean }[] =
+              (json.proposals ?? []).map((p: { id: string; text?: string | null; vote_count?: number; is_finalized?: boolean; active?: boolean }) => ({
               id: String(p.id),
-              text: String(p.text ?? ''),
+                text: String(p.text ?? ''),
               vote_count: typeof p.vote_count === 'number' ? p.vote_count : 0,
               is_finalized: !!p.is_finalized,
               active: !!p.active
@@ -275,12 +275,12 @@ export default function PartyLobbyPage() {
           });
           setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
           setPartyMotto(json.partyMotto ?? null);
-          (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+          (window as unknown as { __leaderProposalId?: string }).__leaderProposalId = json.leaderProposalId ?? null;
         })
         .catch(() => {});
     })
     // Listen to backend broadcasts for hireling voting updates
-    .on('broadcast', { event: 'hireling_vote_updated' }, (payload: any) => {
+    .on('broadcast', { event: 'hireling_vote_updated' }, (payload: { payload?: { target_party_member_id?: string; current_yes_votes?: number } }) => {
       const { target_party_member_id, current_yes_votes } = payload?.payload || {};
       if (!target_party_member_id || typeof current_yes_votes !== 'number') return;
       setHirelingVoteCountsMap((prev) => ({
@@ -288,7 +288,7 @@ export default function PartyLobbyPage() {
         [target_party_member_id]: current_yes_votes,
       }));
     })
-    .on('broadcast', { event: 'hireling_converted' }, (payload: any) => {
+    .on('broadcast', { event: 'hireling_converted' }, (payload: { payload?: { party_member_id?: string } }) => {
       const { party_member_id } = payload?.payload || {};
       if (!party_member_id) return;
       // Update members to reflect is_npc=true
@@ -306,14 +306,9 @@ export default function PartyLobbyPage() {
       });
     })
     .subscribe();
- 
-     return () => {
-       supabase.removeChannel(channel);
-     };
-  // Subscribe to party status to auto-navigate to results when ready
-  useEffect(() => {
-    if (!party) return;
-    const channel = supabase
+
+    // Also subscribe to party status changes to auto-navigate to results when ready
+    const statusChannel = supabase
       .channel(`party-status-${party.id}`)
       .on(
         'postgres_changes',
@@ -323,7 +318,7 @@ export default function PartyLobbyPage() {
           table: 'parties',
           filter: `id=eq.${party.id}`,
         },
-        (payload: any) => {
+        (payload: { new?: { status?: string } }) => {
           const newStatus = payload?.new?.status;
           if (newStatus === 'Results' || newStatus === 'ResultsReady') {
             router.push(`/party/${code}/results`);
@@ -332,11 +327,11 @@ export default function PartyLobbyPage() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [party, supabase, router, code]);
-   }, [party, supabase]); // Removed members from dependencies to avoid re-subscription issues with filter
+     return () => {
+       supabase.removeChannel(channel);
+       supabase.removeChannel(statusChannel);
+     };
+   }, [party, supabase, router, code]); // include router/code in deps
  
    // Expose the memoized map directly for rendering
    const hirelingVoteCounts = useMemo(() => hirelingVoteCountsMap, [hirelingVoteCountsMap]);
@@ -408,7 +403,7 @@ export default function PartyLobbyPage() {
 
   // Switch my vote to a different proposal for the same target (optimistic; realtime will reconcile)
   const handleChangeVote = async (proposalId: string) => {
-    const target = proposals.find((p) => p.id === proposalId)?.target_member_id;
+    const _target = proposals.find((p) => p.id === proposalId)?.target_member_id;
     if (!currentUserMember || !target) return;
 
     setVotes((prev) => {
@@ -462,7 +457,7 @@ export default function PartyLobbyPage() {
     }
   };
 
-  const handleStartQuest = async () => {
+  const _handleStartQuest = async () => {
     if (!currentUserMember) return;
 
     // Optimistically navigate, then update status
@@ -510,7 +505,7 @@ export default function PartyLobbyPage() {
     };
 
     checkAssessmentStatus();
-  }, [currentUserMember, party, code]);
+  }, [currentUserMember, party, code, supabase]);
 
   // --- Render Logic ---
   if (loading || userLoading) return <div className="text-center p-8">Loading Party...</div>;
@@ -586,7 +581,7 @@ export default function PartyLobbyPage() {
             .then((data) => {
               if (!data) return;
               // Merge incoming list without dropping optimistic if its text isn't present yet
-              const incoming = (data.proposals ?? []).map((p: any) => ({
+              const incoming = (data.proposals ?? []).map((p: { id: string; text?: string | null; vote_count?: number; is_finalized?: boolean; active?: boolean }) => ({
                 id: String(p.id),
                 text: String(p.text ?? ''),
                 vote_count: typeof p.vote_count === 'number' ? p.vote_count : 0,
@@ -609,7 +604,7 @@ export default function PartyLobbyPage() {
               });
               setMyMottoVoteProposalId(data.myVoteProposalId ?? null);
               setPartyMotto(data.partyMotto ?? null);
-              (window as any).__leaderProposalId = data.leaderProposalId ?? null;
+             (window as unknown as { __leaderProposalId?: string }).__leaderProposalId = data.leaderProposalId ?? null;
             })
             .catch(() => {});
         }
@@ -618,7 +613,7 @@ export default function PartyLobbyPage() {
         setMottoProposals((prev) => prev.filter((p) => p.id !== tempId));
         console.error('Failed to propose motto');
       }
-    } catch (e) {
+    } catch {
       // Network or unexpected error: keep optimistic until realtime/next fetch arrives
       console.error('Failed to propose motto', e);
     }
@@ -633,7 +628,7 @@ export default function PartyLobbyPage() {
         const r = await fetch(`/api/party/${code}/mottos`, { cache: 'no-store' });
         if (r.ok) {
           const data = await r.json();
-          const match = (data?.proposals ?? []).find((p: any) => (p.text ?? '') === (proposalText ?? ''));
+          const match = (data?.proposals ?? []).find((p: { id?: string; text?: string | null }) => (p.text ?? '') === (proposalText ?? ''));
           if (match?.id && typeof match.id === 'string') {
             resolvedId = match.id;
             // Immediately swap optimistic id to canonical in local state to prevent future stale posts
@@ -690,12 +685,12 @@ export default function PartyLobbyPage() {
           if (proposalId) {
             return prev.map(p => {
               // Revert using resolved canonical id if server provided one
-              const target = (async () => {
+              const _targetResolve = (async () => {
                 try {
                   const r = await fetch(`/api/party/${code}/mottos`, { cache: 'no-store' });
                   if (r.ok) {
                     const d = await r.json();
-                    const match = (d?.proposals ?? []).find((pp: any) => pp.text === proposalText);
+                    const match = (d?.proposals ?? []).find((pp: { id?: string; text?: string | null }) => pp.text === proposalText);
                     return match?.id ?? proposalId;
                   }
                 } catch {}
@@ -721,16 +716,16 @@ export default function PartyLobbyPage() {
           })
           .then(json => {
             if (!json) return;
-            setMottoProposals((json.proposals ?? []).map((p: any) => ({
-              id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+            setMottoProposals((json.proposals ?? []).map((p: { id: string; text?: string | null; vote_count?: number; is_finalized?: boolean; active?: boolean }) => ({
+              id: p.id, text: p.text ?? '', vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
             })));
             setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
             setPartyMotto(json.partyMotto ?? null);
-            (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+            (window as unknown as { __leaderProposalId?: string }).__leaderProposalId = json.leaderProposalId ?? null;
           })
           .catch(() => {});
       }
-    } catch (e) {
+    } catch {
       // Network failure: revert and re-sync
       setMottoProposals(prev => {
         if (!proposalId && prevSelection) {
@@ -757,19 +752,19 @@ export default function PartyLobbyPage() {
         })
         .then(json => {
           if (!json) return;
-          setMottoProposals((json.proposals ?? []).map((p: any) => ({
-            id: p.id, text: p.text, vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
+          setMottoProposals((json.proposals ?? []).map((p: { id: string; text?: string | null; vote_count?: number; is_finalized?: boolean; active?: boolean }) => ({
+            id: p.id, text: p.text ?? '', vote_count: p.vote_count ?? 0, is_finalized: !!p.is_finalized, active: !!p.active
           })));
           setMyMottoVoteProposalId(json.myVoteProposalId ?? null);
           setPartyMotto(json.partyMotto ?? null);
-          (window as any).__leaderProposalId = json.leaderProposalId ?? null;
+          (window as unknown as { __leaderProposalId?: string }).__leaderProposalId = json.leaderProposalId ?? null;
         })
         .catch(() => {});
     }
   };
 
   // Finalization is automatic on majority; keep stub for backward compatibility (no-op).
-  const handleFinalizeMotto = async (_proposalId: string) => {};
+  const _handleFinalizeMotto = async (_proposalId: string) => {};
 
   const copyJoinLink = () => {
     if (typeof window === 'undefined') return;
@@ -832,8 +827,8 @@ export default function PartyLobbyPage() {
                   Since we do not have created_by/created_at context here, we simply pin the
                   first proposal if not finalized. */}
               {/* Pin leader-proposed motto (from server) when available and not finalized */}
-              {!partyMotto && Array.isArray(mottoProposals) && (window as any).__leaderProposalId && (() => {
-                const lpId = (window as any).__leaderProposalId as string;
+              {!partyMotto && Array.isArray(mottoProposals) && (window as unknown as { __leaderProposalId?: string }).__leaderProposalId && (() => {
+                const lpId = (window as unknown as { __leaderProposalId?: string }).__leaderProposalId as string;
                 const lp = mottoProposals.find(p => p.id === lpId);
                 if (!lp || lp.is_finalized === true || lp.active === false) return null;
                 return (
@@ -867,7 +862,7 @@ export default function PartyLobbyPage() {
                 ) : (
                   mottoProposals.map((p) => {
                     // Skip duplicate rendering of pinned leader proposal
-                    const lpId = (window as any).__leaderProposalId as string | null;
+                    const lpId = (window as unknown as { __leaderProposalId?: string }).__leaderProposalId as string | null;
                     if (!partyMotto && lpId && p.id === lpId) return null;
                     const isMine = myMottoVoteProposalId === p.id;
                     const eligible = members.filter(m => !m.is_npc).length || 0;
@@ -926,12 +921,12 @@ export default function PartyLobbyPage() {
                       )}
                     </h3>
                     <div className="member-meta">
-                      <div className="member-exp-badge">EXP {typeof (member as any).exp === 'number' ? (member as any).exp : 0}</div>
+                      <div className="member-exp-badge">EXP {typeof member.exp === 'number' ? member.exp : 0}</div>
                     </div>
                   </div>
                   <div className="member-card__body">
                     <div className="member-adventureline">
-                      <p className="adventurer-name">"{member.adventurer_name}"</p>
+                      <p className="adventurer-name">&quot;{member.adventurer_name}&quot;</p>
                     </div>
                   </div>
                 </div>
@@ -939,7 +934,7 @@ export default function PartyLobbyPage() {
             }
 
             const { proposals: memberProposals, userHasVoted } = getVotingStatusForMember(member.id);
-            const canVote = currentUserMember?.id !== member.id && !userHasVoted;
+            const _canVote = currentUserMember?.id !== member.id && !userHasVoted;
 
             return (
               <div key={member.id} className="member-card">
@@ -1037,7 +1032,7 @@ export default function PartyLobbyPage() {
 
                 {/* Always show EXP, defaulting to 0 if missing */}
                 <div className="member-exp-badge" style={{ marginTop: '0.25rem', fontSize: '0.9rem' }}>
-                  EXP {typeof (member as any).exp === 'number' ? (member as any).exp : 0}
+                  EXP {typeof member.exp === 'number' ? member.exp : 0}
                 </div>
 
                 {/* Collapsible name voting/proposal area */}

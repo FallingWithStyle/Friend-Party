@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
   const { member_id } = await request.json();
-  const { code } = await params;
+  const { code } = (await params) as { code: string };
 
   console.log('[start-questionnaire] Received member_id:', member_id, 'party code:', code);
 

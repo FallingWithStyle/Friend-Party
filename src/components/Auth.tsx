@@ -6,9 +6,9 @@ import usePartyStore from '@/store/partyStore';
 import LoginModal from './LoginModal';
 import './Auth.css';
 
-export default function Auth({ redirectUrl }: { redirectUrl?: string }) {
-  const { user, loading, signOut } = useAuth();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export default function Auth({ redirectUrl: _redirectUrl }: { redirectUrl?: string }) {
+  const { user, loading: _loading, signOut } = useAuth();
+  const [_isModalOpen, setIsModalOpen] = useState(false);
   const setUser = usePartyStore((state) => state.setUser);
 
   if (user) {
@@ -20,7 +20,7 @@ export default function Auth({ redirectUrl }: { redirectUrl?: string }) {
       <div className="auth-container">
         <LoginModal
           isOpen={true}
-          onClose={() => {}}
+          onClose={() => setIsModalOpen(false)}
         />
       </div>
     );

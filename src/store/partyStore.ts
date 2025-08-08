@@ -49,7 +49,7 @@ const usePartyStore = create<PartyState>((set) => ({
   error: null,
   isUserInfoFlowComplete: false,
   createParty: async (partyData) => {
-    const supabase = createClient();
+    // const supabase = createClient();
     set({ loading: true, error: null });
     try {
       // We call the API route to handle party creation securely on the server

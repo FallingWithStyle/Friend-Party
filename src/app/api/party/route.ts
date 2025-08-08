@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { generatePartyCode } from '@/utils/partyCodeGenerator'
 
-import { cookies } from 'next/headers'
 
 export async function POST(request: Request) {
   const supabase = await createClient()

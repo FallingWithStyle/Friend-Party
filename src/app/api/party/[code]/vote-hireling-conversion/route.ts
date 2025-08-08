@@ -2,21 +2,22 @@ import { createClient } from '@/utils/supabase/server';
 import { NextResponse } from 'next/server';
 
 // Use Node fs only if available (non-edge). This route is in app router and typically runs on Node runtime by default.
-let fsAppend: ((path: string, data: string) => Promise<void>) | null = null;
-try {
-  // dynamic require to avoid bundlers complaining in edge
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const fs = require('fs');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const path = require('path');
-  const logPath = path.join(process.cwd(), 'party_log.txt');
-  fsAppend = async (p: string, d: string) =>
-    await fs.promises.appendFile(logPath, d, { encoding: 'utf8' });
-} catch {
+let fsAppend: ((filePath: string, data: string) => Promise<void>) | null = null;
+import('fs').then((fs) =>
+  import('path').then((path) => {
+    try {
+      const logPath = path.join(process.cwd(), 'party_log.txt');
+      fsAppend = async (_p: string, d: string) =>
+        await fs.promises.appendFile(logPath, d, { encoding: 'utf8' });
+    } catch {
+      fsAppend = null;
+    }
+  })
+).catch(() => {
   fsAppend = null;
-}
+});
 
-async function appendPartyLog(_supabase: any, message: string) {
+async function appendPartyLog(_supabase: unknown, message: string) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   if (fsAppend) {
     try {
@@ -32,10 +33,10 @@ async function appendPartyLog(_supabase: any, message: string) {
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const partyCode = params.code;
+  const { code: partyCode } = (await params) as { code: string };
 
   // 1. Auth
   const {
@@ -64,12 +65,12 @@ export async function POST(
     return new Response('Party not found', { status: 404 });
   }
 
-  const voterMember = party.party_members.find((pm: any) => pm.user_id === user.id);
+  const voterMember = party.party_members.find((pm: { user_id: string }) => pm.user_id === user.id);
   if (!voterMember) {
     return new Response('Voter not found in this party', { status: 403 });
   }
 
-  const targetMember = party.party_members.find((pm: any) => pm.id === target_party_member_id);
+  const targetMember = party.party_members.find((pm: { id: string }) => pm.id === target_party_member_id);
   if (!targetMember) {
     return new Response('Target not found in this party', { status: 400 });
   }
@@ -110,7 +111,7 @@ export async function POST(
 
   // 6. Tally and unanimous check
   const eligibleVoters = party.party_members.filter(
-    (pm: any) => !pm.is_npc && pm.id !== target_party_member_id
+    (pm: { is_npc: boolean; id: string }) => !pm.is_npc && pm.id !== target_party_member_id
   );
   const eligibleVoterCount = eligibleVoters.length;
 
@@ -168,8 +169,8 @@ export async function POST(
         return new Response('Error pre-filling answers', { status: 500 });
       }
 
-      const answered = new Set((existingSelfAnswers ?? []).map((a: any) => a.question_id));
-      const toInsert: any[] = [];
+      const answered = new Set((existingSelfAnswers ?? []).map((a: { question_id: string }) => a.question_id));
+      const toInsert: Array<{ question_id: string; voter_member_id: string; subject_member_id: string; answer_value: string } > = [];
       for (const q of selfAssessmentQuestions ?? []) {
         if (!answered.has(q.id)) {
           toInsert.push({

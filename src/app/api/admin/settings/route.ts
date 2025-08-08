@@ -31,18 +31,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { high, low, hysteresis } = body ?? {};
+  const { high, low, hysteresis } = (body as { high?: number; low?: number; hysteresis?: number }) ?? {};
   try {
     const saved = await saveMoraleSettings(supabase, { high, low, hysteresis }, email);
     return NextResponse.json(saved, { status: 200 });
-  } catch (e: any) {
-    return NextResponse.json({ error: 'Validation/Save failed', details: e?.message ?? String(e) }, { status: 400 });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: 'Validation/Save failed', details: message }, { status: 400 });
   }
 }

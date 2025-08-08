@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 import usePartyStore from '@/store/partyStore';
@@ -24,10 +24,11 @@ type PartyMember = {
 
 export default function ResultsPage({ params }: { params: Promise<{ code: string }> }) {
     const { code } = use(params);
-    const [partyId, setPartyId] = useState<string | null>(null);
+    const [_partyId, setPartyId] = useState<string | null>(null);
     const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
     const [loading, setLoading] = useState(true);
-    const [waitingOn, setWaitingOn] = useState<any[]>([]);
+    type WaitingMember = { first_name: string; assessment_status?: string };
+    const [waitingOn, setWaitingOn] = useState<WaitingMember[]>([]);
     const [isCalculating, setIsCalculating] = useState(false);
     const progressSteps = [
         'Checking party status',
@@ -48,7 +49,114 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     }, []);
     const { setUserInfoFlowComplete } = usePartyStore();
 
-    const checkStatus = async (currentPartyId: string): Promise<boolean> => {
+    const fetchResults = useCallback(async (currentPartyId: string) => {
+        if (!supabase) return;
+        const { data: party, error: partyErr } = await supabase
+          .from('parties')
+          .select('status, motto, morale_score, morale_level')
+          .eq('id', currentPartyId)
+          .single();
+        if (partyErr) throw partyErr;
+        setPartyMotto(party?.motto ?? null);
+        const rawScore = typeof party?.morale_score === 'number' ? (party.morale_score as number) : (party?.morale_score ? Number(party.morale_score) : null);
+        const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
+        setPartyMorale({ score: rawScore, level: rawLevel });
+        const { data: membersData, error: membersError } = await supabase
+            .from('party_members')
+            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
+            .eq('party_id', currentPartyId);
+        if (membersError) throw membersError;
+        setPartyMembers(membersData || []);
+        logDebug('Final results displayed:', membersData);
+        if (party?.status === 'Results') {
+          try {
+            const { party: storeParty, user } = usePartyStore.getState();
+            if (storeParty && user && !isCalculating) {
+              setCurrentStep(2);
+              await handleCheckResults();
+            }
+          } catch (e) {
+            console.error('Failed to trigger calculation from fetchResults:', e);
+          }
+        }
+        setLoading(false);
+    }, [supabase, isCalculating]);
+
+    const handleCheckResults = useCallback(async () => {
+        if (isCalculating) return;
+        setIsCalculating(true);
+
+        const { party } = usePartyStore.getState();
+        if (!party || !supabase) {
+            console.error("handleCheckResults: partyId or supabase is not set.", { party, supabase });
+            setIsCalculating(false);
+            return;
+        }
+        const partyId = party.id;
+
+        console.log("Getting user and members from store...");
+        const { user, members } = usePartyStore.getState();
+        if (!user) {
+            console.error("handleCheckResults: User not found in store.");
+            setError("User not found. Please ensure you are logged in.");
+            setIsCalculating(false);
+            return;
+        }
+        console.log("User found:", user);
+
+        const currentMember = members.find(m => m.user_id === user.id);
+        if (!currentMember) {
+            console.error("handleCheckResults: Could not find current member in party.", { members });
+            setError("Could not identify the current user within this party.");
+            setIsCalculating(false);
+            return;
+        }
+        const memberId = currentMember.id;
+        console.log("Current member found:", currentMember);
+
+        setLoading(true);
+
+        try {
+            console.log(`Fetching /api/party/${code}/finish-questionnaire with member_id: ${memberId}`);
+            const response = await fetch(`/api/party/${code}/finish-questionnaire`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ member_id: memberId, assessment_type: 'peer-assessment' }),
+            });
+            console.log("Fetch response received:", response);
+
+            if (!response.ok) {
+                const apiError = await response.json().catch(() => ({ error: 'Failed to parse error response.' }));
+                console.error("API Error:", apiError);
+                throw new Error(apiError.error || 'Failed to trigger result calculation.');
+            }
+
+            console.log("API call successful, checking status...");
+            try {
+              const { error: partyUpdateErr } = await supabase
+                .from('parties')
+                .update({ status: 'Results' })
+                .eq('id', partyId);
+              if (partyUpdateErr) {
+                console.warn('Non-fatal: failed to bump party status to Results locally:', partyUpdateErr);
+              }
+            } catch (e) {
+              console.warn('Non-fatal: party status bump threw:', e);
+            }
+
+
+        } catch (err) {
+            console.error("Error in handleCheckResults:", err);
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            setError(message);
+            setLoading(false);
+            setIsCalculating(false);
+        }
+    }, [isCalculating, code, supabase]);
+
+    const checkStatus = useCallback(async (currentPartyId: string): Promise<boolean> => {
         if (!currentPartyId || !supabase) return false;
 
         try {
@@ -93,12 +201,13 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                     return false; // Continue polling, let the interval handle it
                 }
             }
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            setError(message);
             setLoading(false);
             return true; // Stop polling on error
         }
-    };
+    }, [supabase, isCalculating, fetchResults, handleCheckResults]);
 
     const fetchResults = async (currentPartyId: string) => {
         if (!supabase) return;
@@ -176,8 +285,9 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
                 }, 5000); // Check every 5 seconds
 
                 return () => clearInterval(statusCheck);
-            } catch (err: any) {
-                setError(err.message);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Unknown error';
+                setError(message);
                 setLoading(false);
             }
         };
@@ -185,7 +295,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         if (code && supabase) {
             initializePage();
         }
-    }, [code, supabase, setUserInfoFlowComplete, getPartyByCode]);
+    }, [code, supabase, setUserInfoFlowComplete, getPartyByCode, checkStatus]);
 
     useEffect(() => {
         console.log('waitingOn changed:', waitingOn);
@@ -258,9 +368,10 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             }
 
 
-        } catch (err: any) {
+        } catch (err) {
             console.error("Error in handleCheckResults:", err);
-            setError(err.message);
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            setError(message);
             setLoading(false);
             setIsCalculating(false);
         }
@@ -271,7 +382,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             <div className="loading-container">
                 <LoadingSpinner />
                 <div className="progress-indicator">
-                    <h2 className="progress-title">Calculating Your Party's Destiny</h2>
+                     <h2 className="progress-title">Calculating Your Party&apos;s Destiny</h2>
                     <ul className="progress-steps">
                         {progressSteps.map((step, index) => (
                             <li key={index} className={`progress-step ${index <= currentStep ? 'completed' : ''}`}>
@@ -318,9 +429,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     });
   };
 
-  // Local state for party meta
-  const [partyMotto, setPartyMotto] = useState<string | null>(null);
-  const [partyMorale, setPartyMorale] = useState<{ score: number | null; level: string | null }>({ score: null, level: null });
+  // Local state for party meta (declared earlier to avoid conditional hooks)
 
   return (
     <div className="results-container">

@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { cookies } from 'next/headers';
 
 export async function POST(
   request: Request,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const { code } = params;
+  const { code } = (await params) as { code: string };
   const { firstName, lastName } = await request.json();
 
   if (!firstName) {

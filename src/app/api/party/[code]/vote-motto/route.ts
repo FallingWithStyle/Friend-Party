@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } from '@/lib/morale';
+import type { PartyMemberRow, MottoProposalRow, MottoVoteRow } from '@/types/db';
 
 // POST /api/party/[code]/vote-motto
 // body: { proposal_id: string | null, proposal_text?: string }
@@ -8,19 +9,18 @@ import { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_L
 // - proposal_text supported only for normalized column "text"
 export async function POST(
   request: Request,
-  context: { params: Promise<{ code: string }> } | { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as { proposal_id?: string | null; proposal_text?: string };
   const proposalId = body?.proposal_id ?? null;
   const proposalTextFromBody: string | null =
     typeof body?.proposal_text === 'string' && body.proposal_text.trim().length > 0
       ? body.proposal_text.trim()
       : null;
 
-  // Await dynamic params for Next.js App Router compliance
-  const p = (context as any).params;
-  const { code } = typeof p?.then === 'function' ? await (p as Promise<{ code: string }>) : (p as { code: string });
+  // Dynamic route param
+  const { code } = (await params) as { code: string };
 
   // Resolve auth
   const { data: userResp, error: userErr } = await supabase.auth.getUser();
@@ -62,11 +62,11 @@ export async function POST(
       .maybeSingle();
 
     if (res.error || !res.data) return null;
-    const p = res.data as any;
+    const p = res.data as MottoProposalRow;
     return {
       id: p.id,
       party_id: p.party_id,
-      text: p.text as string,
+      text: String(p.text ?? ''),
       active: !!p.active,
       is_finalized: !!p.is_finalized,
     };
@@ -128,7 +128,7 @@ export async function POST(
       .select('id, is_npc')
       .eq('party_id', party.id);
     if (error || !members) return 0;
-    return members.filter((m: any) => !m.is_npc).length;
+    return members.filter((m: PartyMemberRow) => !m.is_npc).length;
   };
 
   // Helper to try auto-finalize when any proposal gains strict majority
@@ -137,7 +137,8 @@ export async function POST(
     if (party.motto) return;
 
     // Pull active proposals with counts, tolerate legacy schema by falling back
-    let proposals: any[] = [];
+    type MottoProposal = { id: string; text: string; vote_count?: number | null; active?: boolean | null; is_finalized?: boolean | null };
+    let proposals: MottoProposal[] = [];
     const resNew = await supabase
       .from('party_motto_proposals')
       .select('id, text, vote_count, active, is_finalized, created_at')
@@ -157,7 +158,7 @@ export async function POST(
     const threshold = Math.floor(eligible / 2) + 1;
 
     // Find any proposal meeting majority
-    const winner = proposals.find((p) => (p.vote_count ?? 0) >= threshold);
+    const winner = proposals.find((p: MottoProposal) => (p.vote_count ?? 0) >= threshold);
     if (winner) {
       // Idempotency: ensure not already finalized/party already set
       if (winner.is_finalized) return;
@@ -218,10 +219,8 @@ export async function POST(
         .from('party_members')
         .select('id, is_npc, assessment_status')
         .eq('party_id', party.id);
-      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
-      const finished = nonNpc.filter(
-        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
-      );
+      const nonNpc = (pmRows ?? []).filter((m: PartyMemberRow) => !m.is_npc);
+      const finished = nonNpc.filter((m: PartyMemberRow) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted');
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
       const { data: allVotes } = await supabase
@@ -233,10 +232,10 @@ export async function POST(
         const proposalIds = proposals.map((p) => p.id);
         const voters = new Set(
           allVotes
-            .filter((v: any) => proposalIds.includes(v.proposal_id))
-            .map((v: any) => v.voter_member_id)
+            .filter((v: MottoVoteRow) => proposalIds.includes(v.proposal_id))
+            .map((v: MottoVoteRow) => v.voter_member_id)
         );
-        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
+        const nonNpcIds = new Set(nonNpc.map((m: PartyMemberRow) => m.id));
         const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id)).length;
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
@@ -249,7 +248,7 @@ export async function POST(
       const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
 
       // Choose winner based on morale and leader's vote
-      let chosen: any | null = null;
+      let chosen: { id: string; text: string; is_finalized?: boolean | null } | null = null;
       if (morale >= hi) {
         // High morale: leader's vote counts positively
         chosen = tied.find((p) => p.id === leaderChoiceId) ?? null;
@@ -291,10 +290,8 @@ export async function POST(
         .select('id, is_npc, assessment_status')
         .eq('party_id', party.id);
 
-      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
-      const finished = nonNpc.filter(
-        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
-      );
+      const nonNpc = (pmRows ?? []).filter((m: PartyMemberRow) => !m.is_npc);
+      const finished = nonNpc.filter((m: PartyMemberRow) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted');
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
       // Active proposals
@@ -304,7 +301,7 @@ export async function POST(
         .eq('party_id', party.id)
         .eq('active', true);
 
-      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const activeProposalIds = (activeProps ?? []).map((p: { id: string }) => p.id);
       const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
 
       // Voting rate (distinct non-NPC voters who voted on any active proposal)
@@ -315,9 +312,9 @@ export async function POST(
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
-        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
-        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
-        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
+        const voters = new Set((votes ?? []).map((v: { voter_member_id: string }) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: PartyMemberRow) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id)).length;
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
@@ -332,7 +329,7 @@ export async function POST(
           .select('morale_level')
           .eq('id', party.id)
           .maybeSingle();
-        previousLevel = (prevParty?.morale_level as any) ?? null;
+        previousLevel = (prevParty?.morale_level as 'Low' | 'Neutral' | 'High' | null) ?? null;
       } catch {}
 
       // Determine effective level with hysteresis and persist
@@ -343,8 +340,9 @@ export async function POST(
         .from('parties')
         .update({ morale_score: morale, morale_level: nextLevel })
         .eq('id', party.id);
-    } catch (e: any) {
-      console.warn('updateMorale skipped:', e?.message ?? e);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('updateMorale skipped:', msg);
     }
   };
   // Fetch any existing vote for this member across proposals in this party

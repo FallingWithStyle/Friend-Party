@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 import './page.css';
 
 export default function JoinPartyPage() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<{ first_name?: string; last_name?: string } | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,7 +19,7 @@ export default function JoinPartyPage() {
   const [checkingMembership, setCheckingMembership] = useState(true); // New state for loading
   const router = useRouter();
   const { code } = useParams();
-  const { loading, error, joinParty } = usePartyStore();
+  const { loading, joinParty } = usePartyStore();
   const supabase = createClient() as unknown as SupabaseClient; // Get supabase client
   const { user, loading: userLoading } = useAuth(); // Get user and userLoading from useAuth
 

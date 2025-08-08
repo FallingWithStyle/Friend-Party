@@ -20,7 +20,8 @@ async function getUserProfile(userId: string) {
 }
 
 // Helper function to create or update user profile
-async function upsertUserProfile(userId: string, profileData: any) {
+type ProfileInput = Record<string, unknown>;
+async function upsertUserProfile(userId: string, profileData: ProfileInput) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
@@ -40,7 +41,7 @@ async function upsertUserProfile(userId: string, profileData: any) {
   return data;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = (await request.json()) as ProfileInput;
   const profile = await upsertUserProfile(user.id, body);
 
   if (!profile) {

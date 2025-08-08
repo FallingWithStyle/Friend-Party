@@ -7,15 +7,14 @@ import { createClient } from '@/utils/supabase/server';
 // and deactivates all proposals in the party (active=false).
 export async function POST(
   request: Request,
-  context: { params: Promise<{ code: string }> } | { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const body = await request.json().catch(() => ({}));
-  const proposalId = body?.proposal_id as string | undefined;
+  const body = (await request.json().catch(() => ({}))) as { proposal_id?: string };
+  const proposalId = body?.proposal_id;
 
-  // Next.js App Router requires awaiting dynamic params in some runtimes
-  const p = (context as any).params;
-  const { code } = typeof p?.then === 'function' ? await (p as Promise<{ code: string }>) : (p as { code: string });
+  // Dynamic route param
+  const { code } = (await params) as { code: string };
 
   if (!proposalId) {
     return NextResponse.json({ error: 'proposal_id is required' }, { status: 400 });
@@ -51,7 +50,7 @@ export async function POST(
   }
 
   // Enforce leader-only based on is_leader flag
-  const isLeader = !!(meMember as any)?.is_leader;
+  const isLeader = Boolean((meMember as { is_leader?: boolean })?.is_leader);
   if (!isLeader) {
     return NextResponse.json({ error: 'Only the party leader can finalize the motto' }, { status: 403 });
   }

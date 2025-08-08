@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { getMoraleSettings } from '@/lib/settings';
 import { computeMoraleScore, resolveMoraleLevel } from '@/lib/morale';
+import type { PartyMemberRow } from '@/types/db';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
   const { member_id: memberId, assessment_type: assessmentType } = await request.json();
-  const { code } = await params;
+  const { code } = (await params) as { code: string };
 
   try {
     const statusToUpdate = assessmentType === 'self-assessment' ? 'SelfAssessmentCompleted' : 'PeerAssessmentCompleted';
@@ -134,10 +135,8 @@ export async function POST(
         .select('id, is_npc, assessment_status')
         .eq('party_id', partyData.id);
 
-      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
-      const finished = nonNpc.filter(
-        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
-      );
+      const nonNpc = (pmRows ?? []).filter((m: PartyMemberRow) => !m.is_npc);
+      const finished = nonNpc.filter((m: PartyMemberRow) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted');
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
       // 2) Active proposals
@@ -147,7 +146,7 @@ export async function POST(
         .eq('party_id', partyData.id)
         .eq('active', true);
 
-      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const activeProposalIds = (activeProps ?? []).map((p: { id: string }) => p.id);
       const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
 
       // 3) Voting rate
@@ -158,9 +157,9 @@ export async function POST(
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
-        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
-        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
-        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
+        const voters = new Set((votes ?? []).map((v: { voter_member_id: string }) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: PartyMemberRow) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id)).length;
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
@@ -174,7 +173,7 @@ export async function POST(
           .select('morale_level')
           .eq('id', partyData.id)
           .maybeSingle();
-        previousLevel = (prevParty?.morale_level as any) ?? null;
+        previousLevel = (prevParty?.morale_level as 'Low' | 'Neutral' | 'High' | null) ?? null;
       } catch {}
 
       const nextLevel = resolveMoraleLevel(score, previousLevel);
@@ -195,10 +194,8 @@ export async function POST(
         .select('id, is_npc, assessment_status')
         .eq('party_id', partyData.id);
 
-      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
-      const finished = nonNpc.filter(
-        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
-      );
+      const nonNpc = (pmRows ?? []).filter((m: PartyMemberRow) => !m.is_npc);
+      const finished = nonNpc.filter((m: PartyMemberRow) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted');
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
       // 2) Active proposals and proposal rate
@@ -208,7 +205,7 @@ export async function POST(
         .eq('party_id', partyData.id)
         .eq('active', true);
 
-      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const activeProposalIds = (activeProps ?? []).map((p: { id: string }) => p.id);
       const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
 
       // 3) Voting rate (distinct non-NPC voters who voted on any active proposal)
@@ -219,9 +216,9 @@ export async function POST(
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
-        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
-        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
-        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
+        const voters = new Set((votes ?? []).map((v: { voter_member_id: string }) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: PartyMemberRow) => m.id));
+        const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id)).length;
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
@@ -234,7 +231,7 @@ export async function POST(
         .select('morale_level')
         .eq('id', partyData.id)
         .maybeSingle();
-      const previousLevel2 = (prevParty2?.morale_level as any) ?? null;
+      const previousLevel2 = (prevParty2?.morale_level as 'Low' | 'Neutral' | 'High' | null) ?? null;
 
       // Ensure settings exist (future-proofing; not directly passed to resolver yet)
       await getMoraleSettings(supabase);

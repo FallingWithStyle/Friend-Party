@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { IS_DEBUG_MODE, logDebug } from '@/lib/debug';
 import usePartyStore from '@/store/partyStore'; // Import usePartyStore
 import './DebugToolbar.css';
@@ -9,7 +9,6 @@ import './DebugToolbar.css';
 export const DebugToolbar = () => {
   const [isMinimized, setIsMinimized] = useState(true);
   const pathname = usePathname();
-  const router = useRouter();
   const { getPartyByCode, resetPartyState } = usePartyStore(); // Get resetPartyState from the store
 
   if (!IS_DEBUG_MODE) {
@@ -18,7 +17,7 @@ export const DebugToolbar = () => {
 
   const partyCodeMatch = pathname.match(/\/party\/([a-zA-Z0-9]+)/);
   const partyCode = partyCodeMatch ? partyCodeMatch[1] : null;
-  const isQuestionnairePage = pathname.includes('/questionnaire');
+  const _isQuestionnairePage = pathname.includes('/questionnaire');
   const isSelfAssessment = pathname.includes('/questionnaire') && !pathname.includes('/peer');
   const isPeerAssessment = pathname.includes('/questionnaire/peer');
 
@@ -46,7 +45,7 @@ export const DebugToolbar = () => {
     }
   };
 
-  const handleAutoComplete = async (type: 'self' | 'peer') => {
+  const _handleAutoComplete = async (type: 'self' | 'peer') => {
     if (!partyCode) {
       logDebug("No party code found for auto-complete.");
       return;

@@ -41,7 +41,7 @@ export default function Home() {
             throw error;
           }
 
-          const parties = partyMembers?.map((pm: any) => pm.party).filter(Boolean) || [];
+          const parties = partyMembers?.map((pm: { party?: Party }) => pm.party).filter(Boolean) || [];
           setJoinedParties(parties as Party[]);
 
         } catch (error) {
@@ -53,7 +53,7 @@ export default function Home() {
     };
 
     fetchJoinedParties();
-  }, [user]); // Add user to dependencies
+  }, [user, supabase]);
 
 
   const handleJoinParty = (e: React.FormEvent) => {
@@ -129,7 +129,7 @@ export default function Home() {
           » Forge a New Party «
         </Link>
 
-        <p className="home-join-text">Or, Join an Existing Party:</p>
+              <p className="home-join-text">Or, Join an Existing Party:</p>
         <form onSubmit={handleJoinParty} className="home-form">
           <label htmlFor="partyCode" style={{ display: 'none' }}>
             Party Code
@@ -148,7 +148,7 @@ export default function Home() {
         </form>
 
         {user && ( // Only show "Your Parties" if user is logged in
-          <div className="home-parties">
+              <div className="home-parties">
             <h2>Your Parties</h2>
             {joinedParties.length > 0 ? (
               <div className="party-list">
@@ -161,14 +161,14 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <p>You haven't joined any parties yet.</p>
+              <p>You haven&apos;t joined any parties yet.</p>
             )}
           </div>
         )}
 
         <div className="home-footer">
           <div className="home-footer-divider" />
-          <p className="home-footer-text">© 2025 Friend Party</p>
+             <p className="home-footer-text">&copy; 2025 Friend Party</p>
         </div>
       </div>
     </>

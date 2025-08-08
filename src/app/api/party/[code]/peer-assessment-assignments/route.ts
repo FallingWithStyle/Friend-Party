@@ -10,10 +10,10 @@ import { logDebug } from '@/lib/debug';
  */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
-  const { code } = await params;
+  const { code } = (await params) as { code: string };
   logDebug('[Assignments][GET] start', { code });
 
   // 1) Auth

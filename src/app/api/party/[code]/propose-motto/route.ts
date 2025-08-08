@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { computeMoraleScore, resolveMoraleLevel, MORALE_HIGH_THRESHOLD, MORALE_LOW_THRESHOLD } from '@/lib/morale';
+import { computeMoraleScore, resolveMoraleLevel } from '@/lib/morale';
+import type { PartyMemberRow } from '@/types/db';
 
 // Explicitly use the Node.js runtime to allow request.json() and Next headers/cookies
 export const runtime = 'nodejs';
@@ -9,13 +10,13 @@ export const runtime = 'nodejs';
 // body: { text: string }
 export async function POST(
   request: Request,
-  context: { params: Promise<{ code: string }> } | { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   try {
     const supabase = await createClient();
 
     // Parse body safely
-    const body = await request.json().catch(() => ({} as any));
+    const body = (await request.json().catch(() => ({}))) as { text?: string };
     const rawText = typeof body?.text === 'string' ? body.text : '';
     const text = rawText.trim();
 
@@ -23,12 +24,8 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid text' }, { status: 400 });
     }
 
-    // Await dynamic params for Next.js App Router compliance
-    const p = (context as any).params;
-    const { code } =
-      typeof p?.then === 'function'
-        ? await (p as Promise<{ code: string }>)
-        : (p as { code: string });
+    // Dynamic route param
+    const { code } = (await params) as { code: string };
 
     // Resolve authed user
     const { data: userResp, error: userErr } = await supabase.auth.getUser();
@@ -85,9 +82,9 @@ export async function POST(
         .select('id, is_npc, assessment_status')
         .eq('party_id', party.id);
 
-      const nonNpc = (pmRows ?? []).filter((m: any) => !m.is_npc);
+      const nonNpc = (pmRows ?? []).filter((m: PartyMemberRow) => !m.is_npc);
       const finished = nonNpc.filter(
-        (m: any) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
+        (m: PartyMemberRow) => (m.assessment_status ?? '') === 'PeerAssessmentCompleted'
       );
       const completionRate = nonNpc.length ? finished.length / nonNpc.length : 0;
 
@@ -98,7 +95,7 @@ export async function POST(
         .eq('party_id', party.id)
         .eq('active', true);
 
-      const activeProposalIds = (activeProps ?? []).map((p: any) => p.id);
+      const activeProposalIds = (activeProps ?? []).map((p: { id: string }) => p.id);
       const proposalRate = nonNpc.length ? Math.min(activeProposalIds.length / nonNpc.length, 1) : 0;
 
       // 3) Voting rate (distinct non-NPC voters on any active proposal)
@@ -109,15 +106,13 @@ export async function POST(
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
-        const voters = new Set((votes ?? []).map((v: any) => v.voter_member_id));
-        const nonNpcIds = new Set(nonNpc.map((m: any) => m.id));
+        const voters = new Set((votes ?? []).map((v: { voter_member_id: string }) => v.voter_member_id));
+        const nonNpcIds = new Set(nonNpc.map((m: PartyMemberRow) => m.id));
         const eligibleVotersVoted = Array.from(voters).filter((id) => nonNpcIds.has(id as string)).length;
         votingRate = nonNpc.length ? eligibleVotersVoted / nonNpc.length : 0;
       }
 
       // Centralized scoring + hysteresis level resolution using defaults (no behavior change)
-      const hi = MORALE_HIGH_THRESHOLD;
-      const lo = MORALE_LOW_THRESHOLD;
       const morale = computeMoraleScore({ completionRate, votingRate, proposalRate });
 
       let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
@@ -127,7 +122,7 @@ export async function POST(
           .select('morale_level')
           .eq('id', party.id)
           .maybeSingle();
-        previousLevel = (prevParty?.morale_level as any) ?? null;
+        previousLevel = (prevParty?.morale_level as unknown as 'Low' | 'Neutral' | 'High' | null) ?? null;
       } catch {}
 
       const nextLevel = resolveMoraleLevel(morale, previousLevel);

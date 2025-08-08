@@ -5,14 +5,12 @@ import { createClient } from '@/utils/supabase/server';
 // Returns proposals with vote_count, the current user's vote (proposal_id if any), and party.motto if finalized
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ code: string }> } | { params: { code: string } }
+  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
 ) {
   const supabase = await createClient();
 
-  // Next.js App Router requires awaiting dynamic params in some runtimes
-  // Support both sync and async contexts for safety
-  const p = (context as any).params;
-  const { code } = typeof p?.then === 'function' ? await (p as Promise<{ code: string }>) : (p as { code: string });
+  // Dynamic route param
+  const { code } = (await params) as { code: string };
 
   // Resolve party by code
   const { data: party, error: partyErr } = await supabase
@@ -100,7 +98,17 @@ export async function GET(
   }
 
   // Normalize proposals to a unified shape so downstream stays stable
-  const normalized = (proposals ?? []).map((p: any) => ({
+  type ProposalRow = {
+    id: string;
+    party_id: string;
+    proposed_by_member_id: string;
+    text: string;
+    vote_count: number | null;
+    is_finalized: boolean | null;
+    active: boolean | null;
+    created_at: string;
+  };
+  const normalized = (proposals ?? []).map((p: ProposalRow) => ({
     id: p.id,
     party_id: p.party_id,
     proposed_by_member_id: p.proposed_by_member_id,
@@ -127,7 +135,7 @@ export async function GET(
     proposals: normalized,
     myVoteProposalId,
     leaderProposalId,
-    moraleScore: (party as any).morale_score ?? null,
-    moraleLevel: (party as any).morale_level ?? null,
+    moraleScore: (party as unknown as { morale_score?: number }).morale_score ?? null,
+    moraleLevel: (party as unknown as { morale_level?: string }).morale_level ?? null,
   });
 }
