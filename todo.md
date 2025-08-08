@@ -104,6 +104,26 @@ Legend:
   - [ ] On success, authenticate and create user record if new
   - [ ] Capture Discord username and avatar
 
+## Early Access Mode — PRD §TBD
+- [ ] Feature flag to enable/disable Early Access globally
+  - [ ] Add `early_access.enabled` setting in `app_settings` (boolean)
+  - [ ] Optional: `early_access.feedback_destination` (e.g., 'table', 'email', 'webhook')
+- [ ] Gate paid features while Early Access is ON
+  - [ ] Identify and list all paid features/flows
+  - [ ] Hide or disable with tooltip explaining Early Access restrictions
+  - [ ] Ensure server-side enforcement as well as UI gating
+- [ ] Feedback/Report mechanism for early users
+  - [ ] Global "Send Feedback" affordance (e.g., toolbar button or floating widget)
+  - [ ] Feedback form captures: page URL/route, query/params, party id/code, member id, current step/status, `is_npc`, browser/UA
+  - [ ] Include user-provided description and optional screenshot
+  - [ ] Create `early_access_feedback` table + RLS for report storage (id, user_id, party_id, route, context JSON, message, created_at)
+  - [ ] API endpoint `POST /api/feedback` to accept reports and persist to DB (and optionally forward to webhook)
+  - [ ] Admin view to browse/export feedback
+- [ ] Acceptance
+  - [ ] Toggling Early Access ON disables paid features for all users
+  - [ ] Feedback submissions include page context automatically and appear in admin view
+  - [ ] When Early Access OFF, full app functionality restored and feedback UI hidden
+
 ## Party Morale and Leader Vote Weighting — PRD §9 (new)
 
 - [x] Define and persist Party Morale score per party
