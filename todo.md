@@ -74,11 +74,11 @@ Legend:
   - [x] Auto-finalize on strict majority and set party.motto (friend-party-app/src/app/api/party/[code]/vote-motto/route.ts:134-183,166-181)
   - [x] Integrate morale-based tie-break behavior when exactly tied (morale-based leader tie-break implemented in [friend-party-app/src/app/api/party/[code]/vote-motto/route.ts](friend-party-app/src/app/api/party/%5Bcode%5D/vote-motto/route.ts:134))
   - [x] Display selected Motto in Lobby and Results (Lobby shows motto; Results shows motto at top)
-- [-] Story 2.6: Add and Assess Hirelings
+- [x] Story 2.6: Add and Assess Hirelings
   - [x] Hireling conversion voting and broadcasts (friend-party-app/src/app/party/[code]/page.tsx:277-301,451-464)
   - [x] “Hireling” indicator and is_npc handling (friend-party-app/src/app/party/[code]/page.tsx:915-916,991-1012)
-  - [ ] Ensure hirelings included as subjects during peer assessment (verify in questionnaire pages)
-  - [ ] Neutral baseline used in calculation (validate in supabase/functions/calculate-results/index.ts)
+  - [x] Ensure hirelings included as subjects during peer assessment (assignments and UI use subjects including NPCs)
+  - [x] Neutral baseline used in calculation (supabase/functions/calculate-results/index.ts: NPC_BASELINE + prefill '9')
 
 ## Epic 3: Big Reveal & Results — PRD §8
 - [x] Story 3.1: Results Calculation Logic
