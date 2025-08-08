@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:start": "supabase start --no-browser --debug",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset --linked --debug"
@@ -14,9 +16,9 @@
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.2",
-    "class-variance-authority": "^0.7.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.5",
+    "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "next": "15.3.5",
     "react": "^19.0.0",
@@ -27,12 +29,13 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@types/node": "^20",
+    "@types/node": "^20.19.9",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
     "supabase": "^2.30.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^1.6.0"
   }
 }
