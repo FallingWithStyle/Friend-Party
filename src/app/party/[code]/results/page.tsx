@@ -49,39 +49,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     }, []);
     const { setUserInfoFlowComplete } = usePartyStore();
 
-    const fetchResults = useCallback(async (currentPartyId: string) => {
-        if (!supabase) return;
-        const { data: party, error: partyErr } = await supabase
-          .from('parties')
-          .select('status, motto, morale_score, morale_level')
-          .eq('id', currentPartyId)
-          .single();
-        if (partyErr) throw partyErr;
-        setPartyMotto(party?.motto ?? null);
-        const rawScore = typeof party?.morale_score === 'number' ? (party.morale_score as number) : (party?.morale_score ? Number(party.morale_score) : null);
-        const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
-        setPartyMorale({ score: rawScore, level: rawLevel });
-        const { data: membersData, error: membersError } = await supabase
-            .from('party_members')
-            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
-            .eq('party_id', currentPartyId);
-        if (membersError) throw membersError;
-        setPartyMembers(membersData || []);
-        logDebug('Final results displayed:', membersData);
-        if (party?.status === 'Results') {
-          try {
-            const { party: storeParty, user } = usePartyStore.getState();
-            if (storeParty && user && !isCalculating) {
-              setCurrentStep(2);
-              await handleCheckResults();
-            }
-          } catch (e) {
-            console.error('Failed to trigger calculation from fetchResults:', e);
-          }
-        }
-        setLoading(false);
-    }, [supabase, isCalculating]);
-
+    // Ensure results calculation can be triggered; defined before fetchResults to satisfy deps
     const handleCheckResults = useCallback(async () => {
         if (isCalculating) return;
         setIsCalculating(true);
@@ -156,6 +124,41 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         }
     }, [isCalculating, code, supabase]);
 
+    const fetchResults = useCallback(async (currentPartyId: string) => {
+        if (!supabase) return;
+        const { data: party, error: partyErr } = await supabase
+          .from('parties')
+          .select('status, motto, morale_score, morale_level')
+          .eq('id', currentPartyId)
+          .single();
+        if (partyErr) throw partyErr;
+        setPartyMotto(party?.motto ?? null);
+        const rawScore = typeof party?.morale_score === 'number' ? (party.morale_score as number) : (party?.morale_score ? Number(party.morale_score) : null);
+        const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
+        setPartyMorale({ score: rawScore, level: rawLevel });
+        const { data: membersData, error: membersError } = await supabase
+            .from('party_members')
+            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
+            .eq('party_id', currentPartyId);
+        if (membersError) throw membersError;
+        setPartyMembers(membersData || []);
+        logDebug('Final results displayed:', membersData);
+        if (party?.status === 'Results') {
+          try {
+            const { party: storeParty, user } = usePartyStore.getState();
+            if (storeParty && user && !isCalculating) {
+              setCurrentStep(2);
+              await handleCheckResults();
+            }
+          } catch (e) {
+            console.error('Failed to trigger calculation from fetchResults:', e);
+          }
+        }
+        setLoading(false);
+    }, [supabase, isCalculating, handleCheckResults]);
+
+    // (moved earlier)
+
     const checkStatus = useCallback(async (currentPartyId: string): Promise<boolean> => {
         if (!currentPartyId || !supabase) return false;
 
@@ -209,48 +212,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         }
     }, [supabase, isCalculating, fetchResults, handleCheckResults]);
 
-    const fetchResults = async (currentPartyId: string) => {
-        if (!supabase) return;
- 
-        // Prefer ResultsReady if already computed; otherwise allow Results as well
-        const { data: party, error: partyErr } = await supabase
-          .from('parties')
-          .select('status, motto, morale_score, morale_level')
-          .eq('id', currentPartyId)
-          .single();
-        if (partyErr) throw partyErr;
-        setPartyMotto(party?.motto ?? null);
-        // Capture morale if present
-        const rawScore = typeof party?.morale_score === 'number' ? (party.morale_score as number) : (party?.morale_score ? Number(party.morale_score) : null);
-        const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
-        setPartyMorale({ score: rawScore, level: rawLevel });
-
-        // Always fetch members for display (including NPCs)
-        const { data: membersData, error: membersError } = await supabase
-            .from('party_members')
-            .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
-            .eq('party_id', currentPartyId);
-
-        if (membersError) throw membersError;
-
-        setPartyMembers(membersData || []);
-        logDebug('Final results displayed:', membersData);
-
-        // If the party just reached Results (not yet ResultsReady), invoke results calculation once
-        if (party?.status === 'Results') {
-          try {
-            const { party: storeParty, user } = usePartyStore.getState();
-            if (storeParty && user && !isCalculating) {
-              setCurrentStep(2); // Calculating results
-              await handleCheckResults();
-            }
-          } catch (e) {
-            console.error('Failed to trigger calculation from fetchResults:', e);
-          }
-        }
-
-        setLoading(false);
-    };
+    // (removed duplicate fetchResults definition)
 
     const { getPartyByCode } = usePartyStore();
     useEffect(() => {
@@ -301,81 +263,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         console.log('waitingOn changed:', waitingOn);
     }, [waitingOn]);
 
-    const handleCheckResults = async () => {
-        if (isCalculating) return;
-        setIsCalculating(true);
-
-        const { party } = usePartyStore.getState();
-        if (!party || !supabase) {
-            console.error("handleCheckResults: partyId or supabase is not set.", { party, supabase });
-            setIsCalculating(false);
-            return;
-        }
-        const partyId = party.id;
-
-        console.log("Getting user and members from store...");
-        const { user, members } = usePartyStore.getState();
-        if (!user) {
-            console.error("handleCheckResults: User not found in store.");
-            setError("User not found. Please ensure you are logged in.");
-            setIsCalculating(false);
-            return;
-        }
-        console.log("User found:", user);
-
-        const currentMember = members.find(m => m.user_id === user.id);
-        if (!currentMember) {
-            console.error("handleCheckResults: Could not find current member in party.", { members });
-            setError("Could not identify the current user within this party.");
-            setIsCalculating(false);
-            return;
-        }
-        const memberId = currentMember.id;
-        console.log("Current member found:", currentMember);
-
-
-        setLoading(true);
-
-        try {
-            console.log(`Fetching /api/party/${code}/finish-questionnaire with member_id: ${memberId}`);
-            const response = await fetch(`/api/party/${code}/finish-questionnaire`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ member_id: memberId, assessment_type: 'peer-assessment' }),
-            });
-            console.log("Fetch response received:", response);
-
-            if (!response.ok) {
-                const apiError = await response.json().catch(() => ({ error: 'Failed to parse error response.' }));
-                console.error("API Error:", apiError);
-                throw new Error(apiError.error || 'Failed to trigger result calculation.');
-            }
-
-            console.log("API call successful, checking status...");
-            // After triggering, bump the party status locally so polling can advance to fetch
-            try {
-              const { error: partyUpdateErr } = await supabase
-                .from('parties')
-                .update({ status: 'Results' })
-                .eq('id', partyId);
-              if (partyUpdateErr) {
-                console.warn('Non-fatal: failed to bump party status to Results locally:', partyUpdateErr);
-              }
-            } catch (e) {
-              console.warn('Non-fatal: party status bump threw:', e);
-            }
-
-
-        } catch (err) {
-            console.error("Error in handleCheckResults:", err);
-            const message = err instanceof Error ? err.message : 'Unknown error';
-            setError(message);
-            setLoading(false);
-            setIsCalculating(false);
-        }
-    };
+    // (removed duplicate handleCheckResults definition)
 
     if (loading) {
         return (

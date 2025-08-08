@@ -1,10 +1,18 @@
 import React from 'react';
+import Image from 'next/image';
 import './LoadingSpinner.css';
 
 const LoadingSpinner = () => {
   return (
     <div className="loading-overlay">
-      <img src="/d20.svg" alt="Loading..." className="loading-spinner" />
+      <Image
+        src="/d20.svg"
+        alt="Loading..."
+        width={64}
+        height={64}
+        className="loading-spinner"
+        priority
+      />
     </div>
   );
 };
