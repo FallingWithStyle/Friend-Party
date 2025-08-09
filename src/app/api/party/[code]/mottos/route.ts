@@ -5,12 +5,20 @@ import { createClient } from '@/utils/supabase/server';
 // Returns proposals with vote_count, the current user's vote (proposal_id if any), and party.motto if finalized
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Record<string, string | string[] | undefined> }
 ) {
   const supabase = await createClient();
 
   // Dynamic route param
-  const { code } = (await params) as { code: string };
+  const { code } = params as { code: string };
+
+  // Resolve authed user first so RLS (party SELECT) evaluates with auth context
+  const { data: userResp } = await supabase.auth.getUser();
+  const userId = userResp?.user?.id ?? null;
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   // Resolve party by code
   const { data: party, error: partyErr } = await supabase
@@ -23,13 +31,7 @@ export async function GET(
     return NextResponse.json({ error: 'Party not found' }, { status: 404 });
   }
 
-  // Resolve authed user; require membership so RLS doesn't silently return empty
-  const { data: userResp } = await supabase.auth.getUser();
-  const userId = userResp?.user?.id ?? null;
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // From here on, we have user context; require membership so RLS doesn't silently return empty
 
   // Resolve member id and enforce membership
   let meMemberId: string | null = null;
