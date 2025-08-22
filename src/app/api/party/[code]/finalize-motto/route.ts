@@ -7,7 +7,7 @@ import { createClient } from '@/utils/supabase/server';
 // and deactivates all proposals in the party (active=false).
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
   const body = (await request.json().catch(() => ({}))) as { proposal_id?: string };

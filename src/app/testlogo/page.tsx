@@ -1,6 +1,30 @@
 import Link from "next/link"
 import "./page.css"
 
+/**
+ * 🎨 LOGO EFFECT TESTING GROUND - PRESERVE FOR FUTURE THEMES 🎨
+ * 
+ * This page contains 6 different logo styling variants that demonstrate
+ * various "statue reflecting firelight" effects using CSS gradients,
+ * background-clip, and text-shadow properties.
+ * 
+ * IMPORTANT: DO NOT DELETE - This page serves as a reference for:
+ * - Unlockable theme variations
+ * - Logo styling experiments
+ * - CSS technique demonstrations
+ * - Future premium features
+ * 
+ * Current Variants:
+ * 1. Original: Gold gradient with dark brown shadow
+ * 2. Golden: Gold text with dark shadow + golden shadow layers
+ * 3. Diluted: Same as variant 2 but with more diluted shadows
+ * 4. Blue: Same as variant 3 but with blue-tinted shadows for contrast
+ * 5. White: Same as variant 3 but with white/cream shadows for readability
+ * 6. Maroon: Same as variant 3 but with maroon shadows (hamburger color)
+ * 
+ * Each variant can be easily adapted for different themes, seasons, or user preferences.
+ * Consider making these unlockable through achievements, level progression, or premium features.
+ */
 export default function TestLogoPage() {
   return (
     <div className="testlogo-container">

@@ -6,7 +6,7 @@ import path from 'path';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   if (!IS_DEBUG_MODE) {
     return new NextResponse('Debug mode is not enabled.', { status: 403 });

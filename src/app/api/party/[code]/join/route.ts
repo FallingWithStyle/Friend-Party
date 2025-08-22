@@ -3,10 +3,10 @@ import { createClient } from '@/utils/supabase/server';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
-  const { code } = (await params) as { code: string };
+  const { code } = await params;
   const { firstName, lastName } = await request.json();
 
   if (!firstName) {

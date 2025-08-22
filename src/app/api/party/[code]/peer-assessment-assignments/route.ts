@@ -10,7 +10,7 @@ import { logDebug } from '@/lib/debug';
  */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
   const { code } = (await params) as { code: string };

@@ -33,7 +33,7 @@ async function appendPartyLog(_supabase: unknown, message: string) {
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
   const { code: partyCode } = (await params) as { code: string };

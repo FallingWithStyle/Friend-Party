@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 // body: { text: string }
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   try {
     const supabase = await createClient();

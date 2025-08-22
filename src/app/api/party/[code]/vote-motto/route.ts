@@ -9,7 +9,7 @@ import type { PartyMemberRow, MottoProposalRow, MottoVoteRow } from '@/types/db'
 // - proposal_text supported only for normalized column "text"
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
   const body = (await request.json().catch(() => ({}))) as { proposal_id?: string | null; proposal_text?: string };

@@ -6,7 +6,7 @@ import type { PartyMemberRow } from '@/types/db';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<Record<string, string | string[] | undefined>> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
   const { member_id: memberId, assessment_type: assessmentType } = await request.json();

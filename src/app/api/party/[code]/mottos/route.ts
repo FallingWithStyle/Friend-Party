@@ -5,12 +5,12 @@ import { createClient } from '@/utils/supabase/server';
 // Returns proposals with vote_count, the current user's vote (proposal_id if any), and party.motto if finalized
 export async function GET(
   _request: Request,
-  { params }: { params: Record<string, string | string[] | undefined> }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   const supabase = await createClient();
 
   // Dynamic route param
-  const { code } = params as { code: string };
+  const { code } = await params;
 
   // Resolve authed user first so RLS (party SELECT) evaluates with auth context
   const { data: userResp } = await supabase.auth.getUser();
