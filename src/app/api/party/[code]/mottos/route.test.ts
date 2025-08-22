@@ -45,6 +45,42 @@ describe('GET /api/party/[code]/mottos', () => {
       user: { id: 'user-A' },
       partyMembers: [] // Empty party members
     });
+    
+    // Override the from mock to handle the specific chaining pattern
+    mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1', motto: null, morale_score: null, morale_level: null }, 
+                error: null 
+              })
+            })
+          })
+        };
+      }
+      if (table === 'party_members') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+              })
+            })
+          })
+        };
+      }
+      // Default mock
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      };
+    });
+    
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
 
     const res = await GET(makeRequest('/api/party/ABCDEF/mottos', undefined, 'GET'), makeParams());
@@ -60,19 +96,28 @@ describe('GET /api/party/[code]/mottos', () => {
       partyMembers: [{ id: 'A', user_id: 'user-A', is_npc: false }]
     });
     
-    // Use our robust mock system instead of recursive mocks
+    // Use simple mock system
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1', motto: null, morale_score: null, morale_level: null }, 
+                error: null 
+              })
+            })
+          })
+        };
+      }
       if (table === 'party_motto_proposals') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [], error: null })
+                order: vi.fn().mockResolvedValue({ data: [], error: null })
               })
             })
-          }),
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [], error: null })
           })
         };
       }
@@ -80,13 +125,30 @@ describe('GET /api/party/[code]/mottos', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
             })
           })
         };
       }
-      // Use default mock for other tables
-      return mockClient.from(table);
+      if (table === 'party_motto_votes') {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ data: [], error: null })
+            })
+          })
+        };
+      }
+      // Default mock
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -106,7 +168,7 @@ describe('GET /api/party/[code]/mottos', () => {
       user: { id: 'user-A' },
       partyMembers: [
         { id: 'A', user_id: 'user-A', is_npc: false },
-        { id: 'B', user_id: 'user-B', is_npc: true } // Leader
+        { id: 'B', user_id: 'user-B', is_leader: true } // Leader
       ]
     });
     
@@ -135,28 +197,48 @@ describe('GET /api/party/[code]/mottos', () => {
 
     const mockVotes = [{ proposal_id: 'proposal-1' }];
 
-    // Use our robust mock system instead of recursive mocks
-    const mockSupabase = createSupabaseMock({ 
-      user: { id: 'user-A' },
-      partyMembers: [
-        { id: 'A', user_id: 'user-A', is_npc: false },
-        { id: 'B', user_id: 'user-B', is_npc: true }
-      ]
-    });
-    
-    // Override specific table responses
-    mockSupabase.from = vi.fn().mockImplementation((table: string) => {
+    // Use simple mock system with call tracking  
+    let partyMembersCallCount = 0;
+    mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1', motto: null, morale_score: null, morale_level: null }, 
+                error: null 
+              })
+            })
+          })
+        };
+      }
       if (table === 'party_motto_proposals') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: mockProposals, error: null })
+                order: vi.fn().mockResolvedValue({ data: mockProposals, error: null })
               })
             })
-          }),
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: mockProposals, error: null })
+          })
+        };
+      }
+      if (table === 'party_members') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockImplementation(() => {
+                  partyMembersCallCount++;
+                  // First call is user membership check, second call is leader lookup
+                  if (partyMembersCallCount === 1) {
+                    return Promise.resolve({ data: { id: 'A' }, error: null });
+                  } else {
+                    return Promise.resolve({ data: { id: 'B' }, error: null });
+                  }
+                })
+              })
+            })
           })
         };
       }
@@ -164,13 +246,21 @@ describe('GET /api/party/[code]/mottos', () => {
         return {
           select: vi.fn().mockReturnValue({
             in: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ data: mockVotes, error: null })
+              eq: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: mockVotes, error: null })
+              })
             })
           })
         };
       }
-      // Use default mock for other tables
-      return mockSupabase.from(table);
+      // Default mock
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -193,17 +283,26 @@ describe('GET /api/party/[code]/mottos', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1', motto: null, morale_score: null, morale_level: null }, 
+                error: null 
+              })
+            })
+          })
+        };
+      }
       if (table === 'party_motto_proposals') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database error' } })
+                order: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database error' } })
               })
             })
-          }),
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database error' } })
           })
         };
       }
@@ -211,13 +310,21 @@ describe('GET /api/party/[code]/mottos', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
             })
           })
         };
       }
-      // Use default mock for other tables
-      return mockClient.from(table);
+      // Default mock
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -242,17 +349,26 @@ describe('GET /api/party/[code]/mottos', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1', code: 'ABCDEF', motto: 'Test Party Motto', morale_score: 85, morale_level: 'High' }, 
+                error: null 
+              })
+            })
+          })
+        };
+      }
       if (table === 'party_motto_proposals') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [], error: null })
+                order: vi.fn().mockResolvedValue({ data: [], error: null })
               })
             })
-          }),
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [], error: null })
           })
         };
       }
@@ -260,13 +376,21 @@ describe('GET /api/party/[code]/mottos', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
             })
           })
         };
       }
-      // Use default mock for other tables
-      return mockClient.from(table);
+      // Default mock
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);

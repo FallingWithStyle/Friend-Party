@@ -79,6 +79,8 @@ export async function GET(
       proposals: [],
       myVoteProposalId: null,
       leaderProposalId: null,
+      moraleScore: (party as unknown as { morale_score?: number }).morale_score ?? null,
+      moraleLevel: (party as unknown as { morale_level?: string }).morale_level ?? null,
     }, { status: 200 });
   }
 
