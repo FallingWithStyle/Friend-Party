@@ -100,59 +100,71 @@ export default function Home() {
   return (
     <>
       <div className="home-container">
-        <h1 className="home-title">Friend Party</h1>
+        <h1 className="home-title">⚔️ ROLLCALL ⚔️</h1>
+        <p className="home-subtitle">"GATHER THY COMPANIONS FOR A QUEST OF WIT, WISDOM, AND CAMARADERIE"</p>
 
         {user ? (
-          <div className="magic-link-section">
-            <p className="text-lg text-gray-700">Signed in as {user.email}</p>
+          <div className="magic-link-section fantasy-card ornate-border">
+            <p className="text-lg text-amber-200">Signed in as {user.email}</p>
             <Link href="/profile" className="home-link mt-2">
               » View Profile «
             </Link>
           </div>
         ) : (
-          <div className="magic-link-section">
+          <div className="magic-link-section fantasy-card ornate-border magical-glow">
+            <h2 className="magic-link-title">🔮 SUMMON MAGIC PORTAL 🔮</h2>
             <form onSubmit={handleMagicLinkSignIn} className="magic-link-form">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email for magic link"
-                className="magic-link-input"
+                placeholder="Enter thy email for magical passage..."
+                className="magic-link-input fantasy-input"
                 required
               />
-              <button type="submit" className="magic-link-button">
-                {magicLinkSent ? 'Link Sent - Check Email' : 'Send Magic Link'}
+              <button type="submit" className="magic-link-button fantasy-button">
+                {magicLinkSent ? 'Link Sent - Check Email' : '✨ Cast Spell'}
               </button>
             </form>
             {magicLinkSent && <p className="magic-link-success">Check your email for the login link!</p>}
+            <p className="magic-link-note">Casting Time: 2 rounds. Check your email for the link after that.</p>
           </div>
         )}
 
-        <Link href="/create" className="home-link">
-          » Forge a New Party «
-        </Link>
+        <div className="create-party-section fantasy-card ornate-border">
+                      <h2 className="create-party-title">⚡ FORGE A NEW ADVENTURE ⚡</h2>
+            <p className="create-party-text">
+              BECOME THE DUNGEON MASTER AND CREATE A LEGENDARY QUEST FOR THY FELLOWSHIP
+            </p>
+          <Link href="/create" className="home-link create-party-button">
+            🏰 Create Party
+          </Link>
+        </div>
 
-              <p className="home-join-text">Or, Join an Existing Party:</p>
-        <form onSubmit={handleJoinParty} className="home-form">
-          <label htmlFor="partyCode" style={{ display: 'none' }}>
-            Party Code
-          </label>
-          <input
-            type="text"
-            id="partyCode"
-            value={partyCode}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="home-input"
-            placeholder="Enter Party Code"
-            required
-          />
-          <button type="submit" className="home-button">Join</button>
-        </form>
+        <div className="join-party-section fantasy-card ornate-border">
+                      <h2 className="magic-link-title">🗡️ JOIN AN EXISTING QUEST 🗡️</h2>
+            <p className="join-party-text">ENTER THE SACRED CODE TO JOIN THY COMPANIONS' ADVENTURE</p>
+          <form onSubmit={handleJoinParty} className="home-form">
+            <label htmlFor="partyCode" style={{ display: 'none' }}>
+              Party Code
+            </label>
+            <input
+              type="text"
+              id="partyCode"
+              value={partyCode}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyCode(e.target.value.toUpperCase())}
+              maxLength={6}
+              className="home-input fantasy-input"
+              placeholder="Enter Party Code..."
+              required
+            />
+            <button type="submit" className="home-button fantasy-button">⚔️ Join Quest</button>
+          </form>
+        </div>
 
         {user && ( // Only show "Your Parties" if user is logged in
-              <div className="home-parties">
-            <h2>Your Parties</h2>
+          <div className="home-parties fantasy-card ornate-border">
+            <h2 className="magic-link-title">🏰 YOUR LEGENDARY QUESTS 🏰</h2>
             {joinedParties.length > 0 ? (
               <div className="party-list">
                 {joinedParties.map((party) => (
@@ -164,14 +176,14 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <p>You haven&apos;t joined any parties yet.</p>
+              <p className="parties-empty">YOU HAVEN&apos;T JOINED ANY QUESTS YET.</p>
             )}
           </div>
         )}
 
         <div className="home-footer">
           <div className="home-footer-divider" />
-             <p className="home-footer-text">&copy; 2025 Friend Party</p>
+          <p className="home-footer-text">&copy; 2025 ROLLCALL • <span className="italic">MAY YOUR DICE ROLL HIGH</span> 🎲</p>
         </div>
       </div>
     </>
