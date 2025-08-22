@@ -234,29 +234,40 @@ describe('POST /api/party/[code]/join', () => {
         };
       }
       if (table === 'parties') {
-        if (table === 'parties') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockResolvedValue({ 
-              data: { id: 'party-1' }, 
-              error: null 
-            }),
-          };
-        }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'party-1' }, 
+                error: null 
+              })
+            })
+          })
+        };
       }
       if (table === 'party_members') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: null, 
-            error: { code: 'PGRST116' }
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: null, 
+                error: { code: 'PGRST116' }
+              })
+            })
           }),
           insert: vi.fn().mockResolvedValue({ error: null }),
         };
       }
-      return mockClient.from(table);
+      // Default mock to prevent recursion
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
     });
 
     // Mock the final party fetch to fail

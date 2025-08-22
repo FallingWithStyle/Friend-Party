@@ -21,7 +21,7 @@ export async function POST(
     }
 
     // First, update or create the user's profile with their name
-    const fullName = `${firstName} ${lastName || ''}`.trim();
+    const fullName = `${firstName.trim()} ${(lastName || '').trim()}`.trim();
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert({

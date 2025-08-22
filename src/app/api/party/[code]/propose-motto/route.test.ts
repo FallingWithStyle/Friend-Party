@@ -57,9 +57,33 @@ describe('POST /api/party/[code]/propose-motto', () => {
 
   it('returns 404 when party not found', async () => {
     const mockClient = createSupabaseMock({ 
-      user: { id: 'user-A' },
-      error: { message: 'Party not found' }
+      user: { id: 'user-A' }
     });
+    
+    // Override to return error for parties table lookup
+    mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Party not found' } })
+            })
+          })
+        };
+      }
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
+    });
+    
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
 
     const res = await POST(makeRequest('/api/party/INVALID/propose-motto', { text: 'Test motto' }), makeParams('INVALID'));
@@ -74,6 +98,42 @@ describe('POST /api/party/[code]/propose-motto', () => {
       user: { id: 'user-A' },
       partyMembers: [] // Empty party members
     });
+    
+    // Override to return error for party_members lookup (user not found)
+    mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null })
+            })
+          })
+        };
+      }
+      if (table === 'party_members') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not a member' } })
+              })
+            })
+          })
+        };
+      }
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
+    });
+    
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
 
     const res = await POST(makeRequest('/api/party/ABCDEF/propose-motto', { text: 'Test motto' }), makeParams());
@@ -101,28 +161,57 @@ describe('POST /api/party/[code]/propose-motto', () => {
     };
 
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null })
+            })
+          })
+        };
+      }
       if (table === 'party_members') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
             })
           })
         };
       }
       if (table === 'party_motto_proposals') {
         return {
-          insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: mockProposal, 
+                error: null 
+              })
+            })
+          }),
           select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ 
-              data: mockProposal, 
-              error: null 
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: [], error: null })
+              })
             })
           })
         };
       }
       // Use default mock for other tables
-      return mockClient.from(table);
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -143,11 +232,22 @@ describe('POST /api/party/[code]/propose-motto', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null })
+            })
+          })
+        };
+      }
       if (table === 'party_members') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
             })
           })
         };
@@ -157,18 +257,36 @@ describe('POST /api/party/[code]/propose-motto', () => {
           insert: vi.fn().mockImplementation((data) => {
             // Verify the text is trimmed
             expect(data.text).toBe('Test motto');
-            return { error: null };
+            return {
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ 
+                  data: { id: 'proposal-1', text: 'Test motto' }, 
+                  error: null 
+                })
+              })
+            };
           }),
           select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ 
-              data: { id: 'proposal-1', text: 'Test motto' }, 
-              error: null 
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: [], error: null })
+              })
             })
           })
         };
       }
       // Use default mock for other tables
-      return mockClient.from(table);
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -185,27 +303,49 @@ describe('POST /api/party/[code]/propose-motto', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null })
+            })
+          })
+        };
+      }
       if (table === 'party_members') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { id: 'A' }, 
-            error: null 
-          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
+            })
+          })
         };
       }
       if (table === 'party_motto_proposals') {
         return {
-          insert: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: null, 
-            error: { message: 'Insert error' }
-          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: null, 
+                error: { message: 'Insert error' }
+              })
+            })
+          })
         };
       }
-      return mockClient.from(table);
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -224,27 +364,84 @@ describe('POST /api/party/[code]/propose-motto', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
-      if (table === 'party_members') {
+      if (table === 'parties') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { id: 'A' }, 
-            error: null 
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { morale_level: 'Neutral' }, error: null })
+            })
           }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        };
+      }
+      if (table === 'party_members') {
+        let partyMembersCallCount = 0;
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((field, value) => {
+              partyMembersCallCount++;
+              // First call is member lookup, second call is morale calculation
+              if (partyMembersCallCount === 1) {
+                // Return chained mock for member lookup (.eq().eq().single())
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+                  })
+                };
+              } else {
+                // Return data directly for morale calculation (.eq() -> data)
+                return Promise.resolve({ data: [{ id: 'A', is_npc: false, assessment_status: 'PeerAssessmentCompleted' }], error: null });
+              }
+            })
+          })
         };
       }
       if (table === 'party_motto_proposals') {
         return {
-          insert: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { id: 'proposal-1' }, 
-            error: null 
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'proposal-1' }, 
+                error: null 
+              })
+            })
           }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [{ id: 'proposal-1' }], error: null })
+            })
+          })
         };
       }
-      return mockClient.from(table);
+      // Comprehensive mock for morale calculation
+      if (table === 'party_motto_votes') {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [], error: null })
+          })
+        };
+      }
+      // Default mock for other tables  
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: [], error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+            }),
+            single: vi.fn().mockResolvedValue({ data: [], error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          }),
+          in: vi.fn().mockResolvedValue({ data: [], error: null })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: null, error: null })
+        })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
@@ -268,27 +465,49 @@ describe('POST /api/party/[code]/propose-motto', () => {
     });
     
     mockClient.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'parties') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'party-1' }, error: null })
+            })
+          })
+        };
+      }
       if (table === 'party_members') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { id: 'A' }, 
-            error: null 
-          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'A' }, error: null })
+              })
+            })
+          })
         };
       }
       if (table === 'party_motto_proposals') {
         return {
-          insert: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { id: 'proposal-1' }, 
-            error: null 
-          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ 
+                data: { id: 'proposal-1' }, 
+                error: null 
+              })
+            })
+          })
         };
       }
-      return mockClient.from(table);
+      // Default mock for other tables
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null })
+      };
     });
 
     vi.mocked(createClient).mockResolvedValue(mockClient as any);
