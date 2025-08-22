@@ -28,6 +28,9 @@ body::before {
   text-align: center;
   min-height: 100vh;
   padding: 2rem 1rem;
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .home-title {
@@ -47,11 +50,12 @@ body::before {
   font-family: var(--font-cinzel-decorative), serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.1;
 }
 
 .home-subtitle {
   font-size: 1.5rem;
-  color: #d97706;
+  color: #fbbf22;
   font-style: italic;
   margin-bottom: 3rem;
   font-family: var(--font-cinzel), serif;
@@ -59,45 +63,85 @@ body::before {
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.3;
+  max-width: 600px;
 }
 
-/* Fantasy card styling */
-.fantasy-card {
-  background: linear-gradient(145deg, #1a0f08 0%, #0f0804 100%);
-  border: 2px solid #8b4513;
-  border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(139, 69, 19, 0.3);
-  position: relative;
-  padding: 2.5rem;
-  margin-bottom: 2.5rem;
-  max-width: 36rem;
-  width: 100%;
-  backdrop-filter: blur(1px);
+/* Fantasy card styling - HIGHEST SPECIFICITY */
+body .home-container .fantasy-card {
+  background: #3d2914 !important;
+  border: 2px solid #8b4513 !important;
+  border-radius: 12px !important;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(139, 69, 19, 0.3) !important;
+  position: relative !important;
+  padding: 2.5rem !important;
+  margin-bottom: 2.5rem !important;
+  max-width: 36rem !important;
+  width: 100% !important;
+  transition: all 0.3s ease !important;
+  color: #f4e4bc !important;
+  /* Ensure solid, opaque background */
+  background-color: #3d2914 !important;
+  background-image: none !important;
 }
 
-.fantasy-card::before {
-  content: "";
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, #cd853f, #daa520, #cd853f);
-  border-radius: 14px;
-  z-index: -1;
+/* Ornate border decoration - HIGHEST SPECIFICITY */
+body .home-container .ornate-border {
+  border: 4px solid transparent !important;
+  background: #3d2914 padding-box, linear-gradient(45deg, #fbbf24, #f59e0b, #d97706, #fbbf24) border-box !important;
+  border-radius: 16px !important;
+  background-clip: padding-box, border-box !important;
+  background-origin: padding-box, border-box !important;
 }
 
-/* Ornate border decoration */
-.ornate-border {
-  border: 3px solid transparent;
-  background: linear-gradient(#1a0f08, #1a0f08) padding-box, linear-gradient(45deg, #cd853f, #daa520, #b8860b, #cd853f)
-    border-box;
-  border-radius: 16px;
+/* Force dark background override for ornate borders - HIGHEST SPECIFICITY */
+body .home-container .fantasy-card.ornate-border {
+  background: #3d2914 !important;
+  border: 4px solid transparent !important;
+  background: #3d2914 padding-box, linear-gradient(45deg, #fbbf24, #f59e0b, #d97706, #fbbf24) border-box !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(139, 69, 19, 0.3), 
+    0 0 20px rgba(251, 191, 36, 0.2),
+    0 0 40px rgba(251, 191, 36, 0.1) !important;
+  position: relative !important;
+  padding: 2.5rem !important;
+  margin-bottom: 2.5rem !important;
+  max-width: 36rem !important;
+  width: 100% !important;
+  background-clip: padding-box, border-box !important;
+  background-origin: padding-box, border-box !important;
+  color: #f4e4bc !important;
+  background-color: #3d2914 !important;
+  background-image: #3d2914 padding-box, linear-gradient(45deg, #fbbf24, #f59e0b, #d97706, #fbbf24) border-box !important;
 }
 
-/* Force dark background override for ornate borders */
-.fantasy-card.ornate-border {
-  background: linear-gradient(145deg, #1a0f08 0%, #0f0804 100%) !important;
+/* Enhanced ornate border effect */
+body .home-container .fantasy-card.ornate-border::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -6px !important;
+  left: -6px !important;
+  right: -6px !important;
+  bottom: -6px !important;
+  background: linear-gradient(45deg, #fbbf24, #f59e0b, #d97706, #fbbf24, #fbbf24) !important;
+  border-radius: 20px !important;
+  z-index: -2 !important;
+  opacity: 0.6 !important;
+  filter: blur(1px) !important;
+}
+
+/* Remove the conflicting ::before pseudo-element when ornate border is applied */
+body .home-container .fantasy-card.ornate-border::before {
+  display: none !important;
+}
+
+/* Remove the ::before pseudo-element from regular fantasy cards to prevent background interference */
+body .home-container .fantasy-card::before {
+  display: none !important;
 }
 
 /* Magical glow effect */
@@ -131,7 +175,7 @@ body::before {
 .magic-link-title {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #d97706;
+  color: #fbbf22;
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
@@ -145,7 +189,7 @@ body::before {
 }
 
 .magic-link-note {
-  color: #d97706;
+  color: #fbbf22;
   font-family: var(--font-cinzel), serif;
   font-size: 0.875rem;
   font-style: italic;
@@ -154,11 +198,92 @@ body::before {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Magic Link Section */
+.magic-link-section {
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 36rem;
+}
+
+.magic-link-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  width: 100%;
+}
+
+.magic-link-input {
+  width: 100%;
+  max-width: 28rem;
+  background: linear-gradient(145deg, #2c1810 0%, #1a0f08 100%);
+  border: 2px solid #8b4513;
+  color: #f4e4bc;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-size: 1.125rem;
+  letter-spacing: 0.05em;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-cinzel), serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.magic-link-input::placeholder {
+  color: #fbbf22;
+}
+
+.magic-link-input:focus {
+  border-color: #cd853f;
+  box-shadow: 0 0 8px rgba(205, 133, 63, 0.3);
+  outline: none;
+}
+
+.magic-link-button {
+  background: linear-gradient(145deg, #8b4513 0%, #a0522d 50%, #8b4513 100%);
+  border: 2px solid #cd853f;
+  color: #f4e4bc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(205, 133, 63, 0.4);
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-family: var(--font-cinzel), serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.magic-link-button:hover {
+  background: linear-gradient(145deg, #a0522d 0%, #cd853f 50%, #a0522d 100%);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(218, 165, 32, 0.4);
+  transform: translateY(-1px);
+}
+
+.magic-link-success {
+  color: #10b981;
+  font-family: var(--font-cinzel), serif;
+  font-weight: 700;
+  margin-top: 1rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Create Party Section */
+.create-party-section {
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 36rem;
+}
+
 .create-party-title {
   font-size: 1.875rem;
   font-weight: 900;
-  color: #d97706;
+  color: #fbbf22;
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
@@ -172,7 +297,7 @@ body::before {
 }
 
 .create-party-text {
-  color: #d97706;
+  color: #fbbf22;
   font-family: var(--font-cinzel), serif;
   margin-bottom: 1.5rem;
   font-weight: 700;
@@ -207,10 +332,16 @@ body::before {
 }
 
 /* Join Party Section */
+.join-party-section {
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 36rem;
+}
+
 .join-party-title {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #d97706;
+  color: #fbbf22;
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
@@ -224,7 +355,7 @@ body::before {
 }
 
 .join-party-text {
-  color: #d97706;
+  color: #fbbf22;
   font-family: var(--font-cinzel), serif;
   margin-bottom: 1.5rem;
   font-weight: 700;
@@ -238,7 +369,7 @@ body::before {
 .parties-title {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #d97706;
+  color: #fbbf22;
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
@@ -252,13 +383,18 @@ body::before {
 }
 
 .parties-empty {
-  color: #d97706;
+  color: #fbbf22;
   font-family: var(--font-cinzel), serif;
   font-weight: 700;
   letter-spacing: 0.01em;
   text-transform: uppercase;
+  font-style: italic;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  padding: 1rem;
+  background: linear-gradient(145deg, #2c1810 0%, #1a0f08 100%);
+  border: 1px solid #8b4513;
+  border-radius: 8px;
 }
 
 .home-join-text {
@@ -270,27 +406,61 @@ body::before {
 
 .home-form {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 1rem;
+  width: 100%;
 }
 
 .home-input {
-  width: 14rem;
-  background-color: var(--card);
-  border: 1px solid var(--border);
-  padding: 0.5rem;
+  width: 100%;
+  max-width: 20rem;
+  background: linear-gradient(145deg, #2c1810 0%, #1a0f08 100%);
+  border: 2px solid #8b4513;
+  color: #f4e4bc;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
   text-align: center;
-  font-size: 1.25rem;
-  letter-spacing: 0.1em;
+  font-size: 1.125rem;
+  letter-spacing: 0.05em;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-cinzel), serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .home-input::placeholder {
-  color: var(--muted);
+  color: #d97706;
 }
 
 .home-input:focus {
+  border-color: #cd853f;
+  box-shadow: 0 0 8px rgba(205, 133, 63, 0.3);
   outline: none;
-  box-shadow: 0 0 0 2px var(--secondary);
+}
+
+.home-button {
+  background: linear-gradient(145deg, #8b4513 0%, #a0522d 50%, #8b4513 100%);
+  border: 2px solid #cd853f;
+  color: #f4e4bc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(205, 133, 63, 0.4);
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-family: var(--font-cinzel), serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-width: 8rem;
+}
+
+.home-button:hover {
+  background: linear-gradient(145deg, #a0522d 0%, #cd853f 50%, #a0522d 100%);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(218, 165, 32, 0.4);
+  transform: translateY(-1px);
 }
 
 /* Fantasy input styling */
@@ -350,20 +520,17 @@ body::before {
   transform: translateY(-1px);
 }
 
-.magic-link-section {
-  margin-bottom: 2rem; /* Added margin-bottom for magic link section */
-}
-
 .home-parties {
   margin-top: 2rem; /* Added margin-top for parties section */
 }
 
 .home-footer-divider {
-  width: 6rem;
-  height: 1px;
-  background-color: var(--border);
-  margin-top: 3rem;
-  margin-bottom: 1rem;
+  width: 8rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d97706, #fbbf24, #d97706, transparent);
+  margin: 3rem auto 1rem auto;
+  border-radius: 1px;
+  box-shadow: 0 0 10px rgba(217, 119, 6, 0.3);
 }
 
 .home-footer-text {
@@ -375,6 +542,8 @@ body::before {
   text-transform: uppercase;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  margin-top: 1rem;
 }
 
 .home-footer-text .italic {
@@ -402,20 +571,148 @@ body::before {
 .party-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem; /* Spacing between party items */
+  gap: 0.75rem;
   margin-top: 1rem;
 }
 
 .party-list-item {
-  padding: 0.25rem 0;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(145deg, #2c1810 0%, #1a0f08 100%);
+  border: 1px solid #8b4513;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.party-list-item:hover {
+  border-color: #cd853f;
+  box-shadow: 0 2px 8px rgba(205, 133, 63, 0.3);
+  transform: translateY(-1px);
 }
 
 .party-list-item a {
-  color: var(--primary); /* Link color */
+  color: #f4e4bc;
   text-decoration: none;
   font-size: 1.125rem;
+  font-family: var(--font-cinzel), serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .party-list-item a:hover {
-  text-decoration: underline;
+  color: #fbbf22;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .home-container {
+    padding: 1rem 0.5rem;
+    gap: 1.5rem;
+  }
+  
+  .home-title {
+    font-size: 3rem;
+  }
+  
+  .home-subtitle {
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  
+  .fantasy-card {
+    padding: 2rem 1.5rem;
+    margin-bottom: 2rem;
+    max-width: 100%;
+  }
+  
+  .fantasy-card.ornate-border {
+    padding: 2rem 1.5rem !important;
+    margin-bottom: 2rem !important;
+    max-width: 100% !important;
+  }
+  
+  .magic-link-form {
+    gap: 0.75rem;
+  }
+  
+  .magic-link-input {
+    max-width: 100%;
+    font-size: 1rem;
+  }
+  
+  .home-form {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .home-input {
+    width: 100%;
+    max-width: none;
+    font-size: 1rem;
+  }
+  
+  .home-button {
+    width: 100%;
+    max-width: 12rem;
+    font-size: 1rem;
+  }
+  
+  .home-footer-divider {
+    width: 6rem;
+    margin: 2rem auto 1rem auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-title {
+    font-size: 2.5rem;
+  }
+  
+  .home-subtitle {
+    font-size: 1.125rem;
+  }
+  
+  .fantasy-card {
+    padding: 1.5rem 1rem;
+  }
+  
+  .fantasy-card.ornate-border {
+    padding: 1.5rem 1rem !important;
+  }
+  
+  .create-party-title,
+  .join-party-title {
+    font-size: 1.5rem;
+  }
+  
+  .magic-link-title {
+    font-size: 1.25rem;
+  }
+}
+
+/* Enhanced button styling */
+.fantasy-button {
+  position: relative;
+  overflow: hidden;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fantasy-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.fantasy-button:hover::before {
+  left: 100%;
 }
