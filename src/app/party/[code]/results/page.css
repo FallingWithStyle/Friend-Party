@@ -1,80 +1,154 @@
+/* D&D 5e Fantasy Styling - Results Page */
+body {
+  background: linear-gradient(135deg, #2c1810 0%, #4a2c17 50%, #6b3e1a 100%);
+  background-attachment: fixed;
+  color: #f4e4bc;
+}
+
+/* Parchment texture overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(circle at 25% 25%, rgba(139, 69, 19, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(160, 82, 45, 0.1) 0%, transparent 50%),
+    linear-gradient(45deg, transparent 49%, rgba(139, 69, 19, 0.05) 50%, transparent 51%);
+  pointer-events: none;
+  z-index: -1;
+}
+
 .results-container {
-  padding: 1rem;
+  padding: 2rem 1rem;
+  min-height: 100vh;
 }
 
 .results-title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 0.5rem;
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin-bottom: 1.5rem;
+  color: #fbbf22;
+  text-align: center;
+  font-family: 'IM Fell English SC', serif;
+  letter-spacing: 0.02em;
+  text-shadow: 2px 2px 4px rgba(44, 24, 16, 0.9);
 }
 
 /* Morale banner */
 .morale-banner {
-  margin: 0.25rem auto 1rem auto;
-  padding: 0.5rem 0.75rem;
+  margin: 0.5rem auto 2rem auto;
+  padding: 1rem 1.5rem;
   max-width: 40rem;
   text-align: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
-  color: var(--foreground);
+  border: 2px solid #8b4513;
+  border-radius: 12px;
+  background: #3d2914;
+  color: #f4e4bc;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(139, 69, 19, 0.3);
 }
 .morale-banner .morale-score {
-  margin-left: 0.35rem;
-  opacity: 0.8;
-  font-weight: 600;
+  margin-left: 0.5rem;
+  opacity: 0.9;
+  font-weight: 700;
+  color: #fbbf22;
 }
 .morale-low {
   border-color: #fca5a5;      /* red-300 */
-  background: #fef2f2;        /* red-50 */
-  color: #991b1b;             /* red-800 */
+  background: #991b1b;        /* red-800 */
+  color: #f4e4bc;             /* cream text */
 }
 .morale-neutral {
-  border-color: #e5e7eb;      /* gray-200 */
-  background: #f9fafb;        /* gray-50 */
-  color: #374151;             /* gray-700 */
+  border-color: #8b4513;      /* brown */
+  background: #6b3e1a;        /* dark brown */
+  color: #f4e4bc;             /* cream text */
 }
 .morale-high {
   border-color: #86efac;      /* emerald-300 */
-  background: #ecfdf5;        /* emerald-50 */
-  color: #065f46;             /* emerald-800 */
+  background: #065f46;        /* emerald-800 */
+  color: #f4e4bc;             /* cream text */
 }
 
 .results-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 1.5rem;
+  margin-top: 2rem;
 }
 
 .member-results-card {
-  border: 1px solid var(--border);
-  padding: 1rem;
+  background: #3d2914;
+  border: 2px solid #8b4513;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(139, 69, 19, 0.3);
+  transition: all 0.3s ease;
+}
+
+.member-results-card:hover {
+  border-color: #fbbf22;
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 12px rgba(0, 0, 0, 0.5), 
+    inset 0 1px 0 rgba(139, 69, 19, 0.3),
+    0 0 20px rgba(251, 191, 36, 0.1);
 }
 
 .member-name {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fbbf22;
+  font-family: 'IM Fell English SC', serif;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.75rem;
 }
 
 .member-class {
-  font-weight: bold;
+  font-weight: 700;
+  color: #f4e4bc;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
 }
 
 .stats-list {
   list-style: none;
   padding: 0;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
+}
+
+.stats-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #6b3e1a;
+  color: #f4e4bc;
+  font-weight: 600;
+}
+
+.stats-list li:last-child {
+  border-bottom: none;
 }
 
 .waiting-container {
-  padding: 1rem;
+  padding: 2rem;
   text-align: center;
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .waiting-title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 1.5rem;
+  color: #fbbf22;
+  font-family: 'IM Fell English SC', serif;
+  letter-spacing: 0.02em;
 }
 
 @media (min-width: 768px) {
@@ -94,64 +168,88 @@
   justify-content: center;
   align-items: center;
   height: 50vh;
-  font-size: 1.25rem;
-  color: var(--foreground);
+  font-size: 1.5rem;
+  color: #fbbf22;
   text-align: center;
   padding: 2rem;
   flex-direction: column;
+  font-family: 'IM Fell English SC', serif;
+  font-weight: 700;
 }
 
 .check-again-button {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  background-color: var(--primary);
-  color: var(--primary-foreground);
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.1rem;
+  background: linear-gradient(145deg, #fbbf24, #f59e0b);
+  color: #2c1810;
   border: none;
-  border-radius: 0.25rem;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  font-weight: 900;
+  font-family: 'IM Fell English SC', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .check-again-button:hover {
-  background-color: #B50000; /* A more distinct, lighter red for hover */
+  background: linear-gradient(145deg, #f59e0b, #d97706);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 .progress-indicator {
   text-align: center;
-  color: var(--foreground);
+  color: #f4e4bc;
+  margin-top: 2rem;
 }
 
 .progress-title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 1.5rem;
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 2rem;
+  color: #fbbf22;
+  font-family: 'IM Fell English SC', serif;
+  letter-spacing: 0.02em;
 }
 
 .progress-steps {
   list-style: none;
   padding: 0;
   margin: 0;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .progress-step {
-  font-size: 1.125rem;
-  padding: 0.5rem 0;
+  font-size: 1.25rem;
+  padding: 1rem 0;
   opacity: 0.5;
-  transition: opacity 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out;
+  color: #f4e4bc;
+  border-bottom: 1px solid #6b3e1a;
+  font-weight: 600;
+}
+
+.progress-step:last-child {
+  border-bottom: none;
 }
 
 .progress-step.completed {
   opacity: 1;
-  font-weight: 600;
+  font-weight: 900;
+  color: #fbbf22;
 }
 
 .progress-step.completed::before {
   content: '✓ ';
-  color: var(--primary);
+  color: #fbbf22;
+  font-weight: 900;
 }
 
 .clickable-when-loading {
   z-index: 10000;
-  position: relative; /* z-index only works on positioned elements */
+  position: relative;
 }
