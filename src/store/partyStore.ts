@@ -6,6 +6,7 @@ interface Party {
   code: string;
   name: string;
   motto: string;
+  status?: string | null;
 }
 
 interface PartyMember {

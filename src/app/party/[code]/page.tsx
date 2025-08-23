@@ -847,7 +847,7 @@ export default function PartyLobbyPage() {
               <div className="assessment-button-row">
                 <button
                   className="assessment-button peer-assessment-button"
-                  onClick={() => router.push(`/party/${code]/questionnaire/peer`)}
+                  onClick={() => router.push(`/party/${code}/questionnaire/peer`)}
                 >
                   👥 Peer Assessment
                 </button>
