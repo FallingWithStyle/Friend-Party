@@ -18,7 +18,7 @@
 .hamburger-icon .bar {
   width: 25px;
   height: 3px;
-  background-color: var(--primary); /* Red color for the bars */
+  background-color: #DAA520; /* Goldenrod color for the bars */
   transition: all 0.3s ease;
   border-radius: 2px;
 }
@@ -75,5 +75,5 @@
 }
 
 .menu-link:hover {
-  color: var(--primary); /* Red hover color */
+  color: #DAA520; /* Goldenrod hover color */
 }
