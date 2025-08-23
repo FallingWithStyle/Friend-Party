@@ -9,13 +9,18 @@ describe('Card Components', () => {
       render(<Card>Card content</Card>);
       const card = screen.getByText('Card content');
       expect(card).toBeInTheDocument();
-      expect(card.parentElement).toHaveClass('rounded-lg', 'border', 'bg-card');
+      // The Card component renders the content directly, so we check the parent div
+      const cardElement = card.closest('[data-slot="card"]');
+      expect(cardElement).toHaveClass('rounded-lg', 'border-4', 'border-border-primary', 'bg-bg-surface');
     });
 
     it('applies custom className', () => {
       render(<Card className="custom-card">Custom</Card>);
-      const card = screen.getByText('Custom').parentElement;
-      expect(card).toHaveClass('custom-card');
+      const card = screen.getByText('Custom');
+      expect(card).toBeInTheDocument();
+      // The Card component renders the content directly, so we check the parent div
+      const cardElement = card.closest('[data-slot="card"]');
+      expect(cardElement).toHaveClass('custom-card');
     });
   });
 
@@ -54,7 +59,7 @@ describe('Card Components', () => {
       render(<CardDescription>Card description</CardDescription>);
       const description = screen.getByText('Card description');
       expect(description).toBeInTheDocument();
-      expect(description).toHaveClass('text-sm', 'text-muted-foreground');
+      expect(description).toHaveClass('text-sm', 'text-text-muted');
     });
 
     it('applies custom className', () => {
@@ -69,7 +74,7 @@ describe('Card Components', () => {
       render(<CardContent>Content here</CardContent>);
       const content = screen.getByText('Content here');
       expect(content).toBeInTheDocument();
-      expect(content).toHaveClass('p-6', 'pt-0');
+      expect(content).toHaveClass('px-6');
     });
 
     it('applies custom className', () => {
@@ -84,7 +89,7 @@ describe('Card Components', () => {
       render(<CardFooter>Footer content</CardFooter>);
       const footer = screen.getByText('Footer content');
       expect(footer).toBeInTheDocument();
-      expect(footer).toHaveClass('flex', 'items-center', 'p-6', 'pt-0');
+      expect(footer).toHaveClass('flex', 'items-center', 'px-6', '[.border-t]:pt-6');
     });
 
     it('applies custom className', () => {
