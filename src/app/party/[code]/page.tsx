@@ -823,6 +823,59 @@ export default function PartyLobbyPage() {
         </p>
         <UserInfoHandler />
  
+        {/* Assessment Section */}
+        {currentUserMember && (
+          <div className="assessment-section">
+            <h2 className="members-title">Assessment Quest</h2>
+            <div className="assessment-buttons">
+              {/* Self Assessment Button */}
+              <div className="assessment-button-row">
+                <button
+                  className="assessment-button self-assessment-button"
+                  onClick={() => router.push(`/party/${code}/questionnaire`)}
+                >
+                  📋 Self Assessment
+                </button>
+                {_selfCompleted && (
+                  <span className="completion-status">
+                    ✅ Completed
+                  </span>
+                )}
+              </div>
+
+              {/* Peer Assessment Button */}
+              <div className="assessment-button-row">
+                <button
+                  className="assessment-button peer-assessment-button"
+                  onClick={() => router.push(`/party/${code]/questionnaire/peer`)}
+                >
+                  👥 Peer Assessment
+                </button>
+                {_peerCompleted && (
+                  <span className="completion-status">
+                    ✅ Completed
+                  </span>
+                )}
+              </div>
+
+              {/* Start Quest Button (for party leader) */}
+              {currentUserMember.is_leader && party.status === 'Lobby' && (
+                <div className="assessment-button-row">
+                  <button
+                    className="assessment-button start-quest-button"
+                    onClick={_handleStartQuest}
+                  >
+                    🚀 Begin the Quest!
+                  </button>
+                  <span className="leader-note">
+                    (Party Leader only)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Motto accordion panel */}
         {showMottoPanel && (
           <div className="motto-panel">

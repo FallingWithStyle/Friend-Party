@@ -182,8 +182,8 @@ body::before {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
-  align-items: stretch; /* ensure equal height columns */
-  grid-auto-rows: 1fr; /* consistent row height based on tallest item in row */
+  align-items: start; /* align items to start instead of stretch */
+  grid-auto-rows: min-content; /* let rows size to content */
 }
 @media (min-width: 640px) {
   .members-container {
@@ -200,7 +200,6 @@ body::before {
   position: relative;
   display: flex;             /* make card a flex column */
   flex-direction: column;
-  height: 100%;              /* fill grid cell height */
   min-height: 180px;         /* guardrail so short-content cards don't collapse */
   padding: 1.5rem;
   border: 2px solid #8b4513;
@@ -330,6 +329,7 @@ body::before {
   flex-direction: column;
   gap: 0.75rem;         /* consistent spacing between internal sections */
   min-height: 60px;    /* stabilize varying content like forms/badges */
+  transition: all 0.3s ease;
 }
 
 .member-adventureline {
@@ -353,6 +353,7 @@ body::before {
   font-size: 0.9rem;
   color: #fbbf22;
   font-weight: 700;
+  transition: all 0.3s ease;
 }
 
 .member-subline {
@@ -457,6 +458,97 @@ body::before {
   margin-top: 1rem;
 }
 
+/* Assessment Section Styles */
+.assessment-section {
+  background: #2c1810;
+  border: 1px solid #8b4513;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.assessment-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assessment-button-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.assessment-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  color: #2c1810;
+  background: linear-gradient(145deg, #fbbf24, #f59e0b);
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 700;
+  font-family: 'IM Fell English SC', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  min-width: 140px;
+}
+
+.assessment-button:hover {
+  background: linear-gradient(145deg, #f59e0b, #d97706);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.assessment-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Primary assessment button (Self Assessment) */
+.assessment-button.self-assessment-button {
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+}
+
+.assessment-button.self-assessment-button:hover {
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
+/* Secondary assessment button (Peer Assessment) */
+.assessment-button.peer-assessment-button {
+  background: linear-gradient(145deg, #8b5cf6, #7c3aed);
+}
+
+.assessment-button.peer-assessment-button:hover {
+  background: linear-gradient(145deg, #7c3aed, #6d28d9);
+}
+
+/* Start Quest button (Leader only) */
+.assessment-button.start-quest-button {
+  background: linear-gradient(145deg, #ef4444, #dc2626);
+  font-size: 1.1rem;
+  padding: 1rem 2rem;
+}
+
+.assessment-button.start-quest-button:hover {
+  background: linear-gradient(145deg, #dc2626, #b91c1c);
+}
+
+.completion-status {
+  color: #10b981;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: 'IM Fell English SC', serif;
+}
+
+.leader-note {
+  color: #8b4513;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 .proposal-item {
   display: flex;
   align-items: center;
@@ -518,6 +610,7 @@ body::before {
   gap: 0.75rem;
   margin-top: 0.5rem;
   justify-content: flex-start; /* keep subline content left-aligned */
+  transition: all 0.3s ease;
 }
 
 /* Style for the needs-name indicator */
@@ -713,6 +806,18 @@ body::before {
   border-color: #fbbf22;
   background: #2c1810;
 }
+
+/* Name panel for member name voting */
+.name-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #2c1810;
+  border: 2px solid #8b4513;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
 .motto-item--final {
   border-color: #16a34a; /* green-600 */
   box-shadow: 0 0 0 2px rgba(22,163,74,0.2) inset;
@@ -746,6 +851,13 @@ body::before {
 .proposal-item--dotted {
   border-style: dashed;
   background: rgba(139, 69, 19, 0.1);
+}
+
+/* Member section for hireling voting */
+.member-section {
+  margin-top: 1rem;
+  transition: all 0.3s ease;
+  overflow: hidden;
 }
 
 .propose-name-input {
