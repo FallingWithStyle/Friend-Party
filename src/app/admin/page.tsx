@@ -151,25 +151,55 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '1.5rem' }}>
-        <h1>Admin</h1>
-        <p>Loading...</p>
+      <div style={{ 
+        padding: '1.5rem', 
+        backgroundColor: '#ffffff', 
+        color: '#333333',
+        minHeight: '100vh',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <h1 style={{ color: '#333333', fontFamily: 'system-ui, -apple-system, sans-serif' }}>Admin</h1>
+        <p style={{ color: '#333333' }}>Loading...</p>
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div style={{ padding: '1.5rem' }}>
-        <h1>Admin</h1>
-        <p>Access denied. You must be signed in as {ADMIN_EMAIL}.</p>
+      <div style={{ 
+        padding: '1.5rem', 
+        backgroundColor: '#ffffff', 
+        color: '#333333',
+        minHeight: '100vh',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <h1 style={{ color: '#333333', fontFamily: 'system-ui, -apple-system, sans-serif' }}>Admin</h1>
+        <p style={{ color: '#333333' }}>Access denied. You must be signed in as {ADMIN_EMAIL}.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '1.5rem' }}>
-      <h1>Admin: Party Morale Settings</h1>
+    <div style={{ 
+      padding: '1.5rem', 
+      backgroundColor: '#ffffff', 
+      color: '#333333',
+      minHeight: '100vh',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      <h1 style={{ color: '#333333', fontFamily: 'system-ui, -apple-system, sans-serif' }}>Admin: Party Morale Settings</h1>
+      
+      <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '8px', border: '1px solid #ddd' }}>
+        <h3 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#333333' }}>How Party Morale Works</h3>
+        <p style={{ margin: '0.5rem 0', fontSize: '14px', lineHeight: '1.4', color: '#333333' }}>
+          Party morale is calculated based on how well party members rate each other in peer assessments. 
+          Higher ratings = higher morale. The system uses these thresholds to determine if morale is "High", "Low", or "Neutral".
+        </p>
+        <p style={{ margin: '0.5rem 0', fontSize: '14px', lineHeight: '1.4', color: '#333333' }}>
+          <strong>Hysteresis</strong> prevents the morale from constantly flipping between states when scores are near the thresholds. 
+          Think of it like a thermostat - it needs a "buffer zone" to avoid constantly switching between hot and cold.
+        </p>
+      </div>
 
       {fetchError && (
         <p style={{ color: 'crimson', marginTop: '0.5rem' }}>
@@ -180,7 +210,12 @@ export default function AdminSettingsPage() {
       <form onSubmit={onSave} style={{ marginTop: '1rem', maxWidth: 520 }}>
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           <label style={{ display: 'grid', gap: '0.25rem' }}>
-            <span>High threshold</span>
+            <div>
+              <span style={{ fontWeight: 'bold', color: '#333333' }}>High Threshold</span>
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                When morale score reaches this value, party morale becomes "High"
+              </div>
+            </div>
             <input
               type="number"
               step="0.01"
@@ -193,7 +228,12 @@ export default function AdminSettingsPage() {
           </label>
 
           <label style={{ display: 'grid', gap: '0.25rem' }}>
-            <span>Low threshold</span>
+            <div>
+              <span style={{ fontWeight: 'bold', color: '#333333' }}>Low Threshold</span>
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                When morale score drops below this value, party morale becomes "Low"
+              </div>
+            </div>
             <input
               type="number"
               step="0.01"
@@ -206,7 +246,20 @@ export default function AdminSettingsPage() {
           </label>
 
           <label style={{ display: 'grid', gap: '0.25rem' }}>
-            <span>Hysteresis</span>
+            <div>
+              <span style={{ fontWeight: 'bold', color: '#333333' }}>Hysteresis (Buffer Zone)</span>
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                Prevents constant switching between High/Low when scores are near thresholds.
+                <br />
+                <strong>Example:</strong> If High=0.7, Low=0.3, Hysteresis=0.05:
+                <br />
+                • Morale becomes "High" when score ≥ 0.7
+                <br />
+                • Morale becomes "Low" when score ≤ 0.3  
+                <br />
+                • Between 0.3-0.7, morale stays whatever it was before (prevents flipping)
+              </div>
+            </div>
             <input
               type="number"
               step="0.01"
@@ -255,10 +308,23 @@ export default function AdminSettingsPage() {
           )}
 
           <div style={{ marginTop: '0.5rem', fontSize: 14, color: '#555' }}>
-            <div>Effective values:</div>
+            <div><strong>Effective values:</strong></div>
             <div>High: {clamp(form.high, 0, 1).toFixed(2)}</div>
             <div>Low: {clamp(form.low, 0, 1).toFixed(2)}</div>
             <div>Hysteresis: {clamp(form.hysteresis, 0, 0.2).toFixed(2)}</div>
+          </div>
+
+          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #ddd' }}>
+            <h4 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#333333' }}>Current Settings in Action:</h4>
+            <div style={{ fontSize: '13px', lineHeight: '1.4' }}>
+              <div><strong>Morale Score Ranges:</strong></div>
+              <div>• <span style={{ color: '#065f46', fontWeight: 'bold' }}>High Morale:</span> {clamp(form.high, 0, 1).toFixed(2)} and above</div>
+              <div>• <span style={{ color: '#991b1b', fontWeight: 'bold' }}>Low Morale:</span> {clamp(form.low, 0, 1).toFixed(2)} and below</div>
+              <div>• <span style={{ color: '#6b3e1a', fontWeight: 'bold' }}>Neutral Morale:</span> Between {clamp(form.low, 0, 1).toFixed(2)} and {clamp(form.high, 0, 1).toFixed(2)}</div>
+              <div style={{ marginTop: '0.5rem', fontSize: '12px', color: '#666' }}>
+                <strong>Note:</strong> Once morale becomes "High" or "Low", it won't change back to "Neutral" until it crosses the opposite threshold (due to hysteresis).
+              </div>
+            </div>
           </div>
         </div>
       </form>
