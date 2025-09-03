@@ -64,6 +64,11 @@ export default function HamburgerMenu() {
               Attributions
             </Link>
           </li>
+          <li>
+            <Link href="/suggestions" className="menu-link" onClick={closeMenu}>
+              Suggestions
+            </Link>
+          </li>
           {isAdmin && (
             <li>
               <Link href="/admin" className="menu-link" onClick={closeMenu}>
