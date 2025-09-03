@@ -100,7 +100,7 @@ export default function Home() {
   return (
     <>
       <div className="home-container">
-        <h1 className="home-title">⚔️ ROLLCALL ⚔️</h1>
+        <h1 className="home-title">⚔️ FRIEND PARTY ⚔️</h1>
         <p className="home-subtitle">"GATHER THY COMPANIONS FOR A QUEST OF WIT, WISDOM, AND CAMARADERIE"</p>
 
         {user ? (
@@ -183,7 +183,7 @@ export default function Home() {
 
         <div className="home-footer">
           <div className="home-footer-divider" />
-          <p className="home-footer-text">&copy; 2025 ROLLCALL • <span className="italic">MAY YOUR DICE ROLL HIGH</span> 🎲</p>
+          <p className="home-footer-text">&copy; 2025 FRIEND PARTY • <span className="italic">MAY YOUR DICE ROLL HIGH</span> 🎲</p>
         </div>
       </div>
     </>

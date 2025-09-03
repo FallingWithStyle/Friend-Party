@@ -292,6 +292,52 @@
 - **Technical Notes**: Discord OAuth integration with Supabase
 - **Dependencies**: Epic 1 completion
 
+### Epic 5: Early Access Mode
+**Goal**: Implement a controlled early access system that allows for user feedback collection while gating premium features during the initial launch phase.
+
+#### Story 5.1: Early Access Feature Flag System
+- **User Story**: As a System Administrator, I want to control early access mode globally, so that I can manage the application's launch phase and feature availability.
+- **Acceptance Criteria**:
+  - AC1: An `early_access.enabled` setting is added to the `app_settings` table (boolean)
+  - AC2: An optional `early_access.feedback_destination` setting is added to configure feedback collection method (e.g., 'table', 'email', 'webhook')
+  - AC3: The system can read and respect these settings across all application components
+  - AC4: Settings can be updated via admin interface or direct database access
+- **Technical Notes**: Global feature flag system with configurable feedback collection
+- **Dependencies**: Epic 1 completion
+
+#### Story 5.2: Premium Feature Gating
+- **User Story**: As a User in Early Access Mode, I want to understand which features are temporarily restricted, so that I know what to expect during the early access period.
+- **Acceptance Criteria**:
+  - AC1: All premium/paid features are identified and catalogued
+  - AC2: When early access is enabled, premium features are hidden or disabled with clear tooltips explaining Early Access restrictions
+  - AC3: Server-side enforcement ensures premium features cannot be accessed even if UI is bypassed
+  - AC4: Clear messaging indicates when early access mode is active
+- **Technical Notes**: Feature gating with both UI and server-side enforcement
+- **Dependencies**: Story 5.1
+
+#### Story 5.3: User Feedback Collection System
+- **User Story**: As an Early Access User, I want to easily report issues or provide feedback, so that I can help improve the application.
+- **Acceptance Criteria**:
+  - AC1: A global "Send Feedback" affordance is available (e.g., toolbar button or floating widget)
+  - AC2: Feedback form automatically captures: page URL/route, query parameters, party ID/code, member ID, current step/status, `is_npc` flag, browser/User Agent
+  - AC3: Users can provide a description and optionally attach a screenshot
+  - AC4: An `early_access_feedback` table is created with RLS for secure feedback storage
+  - AC5: A `POST /api/feedback` endpoint accepts and persists feedback reports
+  - AC6: Admin interface allows browsing and exporting collected feedback
+- **Technical Notes**: Comprehensive feedback collection with automatic context capture
+- **Dependencies**: Story 5.1
+
+#### Story 5.4: Early Access Mode Management
+- **User Story**: As a System Administrator, I want to easily toggle early access mode and manage feedback, so that I can control the application's launch phase effectively.
+- **Acceptance Criteria**:
+  - AC1: Toggling Early Access ON disables all premium features for all users globally
+  - AC2: Feedback submissions include automatic page context and appear in admin view
+  - AC3: When Early Access is OFF, full application functionality is restored and feedback UI is hidden
+  - AC4: Admin can configure feedback destination (database, email, webhook)
+  - AC5: System provides clear status indicators for early access mode state
+- **Technical Notes**: Admin controls for early access lifecycle management
+- **Dependencies**: Story 5.2, Story 5.3
+
 ## 7. Constraints and Assumptions
 - **Technical Constraints**: 
   - Single Git repository structure (polyrepo)
@@ -332,6 +378,7 @@
 - **Phase 2**: Questionnaire Engine (Completed)
 - **Phase 3**: Results & Big Reveal (Completed)
 - **Phase 4**: UI Modernization & Polish (In Progress)
+- **Phase 5**: Early Access Mode (Pending)
 - **Final Release**: MVP Complete, ongoing enhancements
 
 ## 10. Appendices
@@ -341,6 +388,8 @@
   - Hireling: A non-participating individual included in party assessments
   - Party Leader: The creator of a party with tie-breaking authority
   - Party Morale: A score affecting leader vote weighting
+  - Early Access Mode: A controlled launch phase that gates premium features and enables feedback collection
+  - Feature Flag: A system setting that controls the availability of specific application features
 - **References**: 
   - Supabase documentation
   - D&D 5e rules and classes
@@ -348,6 +397,7 @@
 - **Change Log**: 
   - 2025-07-11: Initial draft (John PM)
   - 2025-08-31: Restructured to match standardized template format
+  - 2025-01-27: Added Epic 5: Early Access Mode with comprehensive feature flag and feedback collection system
 
 ---
 

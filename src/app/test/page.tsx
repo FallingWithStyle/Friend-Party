@@ -9,7 +9,7 @@ export default function TestPage() {
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-7xl font-sans font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-700 mb-4 drop-shadow-lg">
-            ⚔️ RollCall ⚔️
+            ⚔️ Friend Party ⚔️
           </h1>
           <p className="text-xl text-amber-200 font-serif italic mb-8">
             "Gather thy companions for a quest of wit and wisdom"
@@ -82,7 +82,7 @@ export default function TestPage() {
           {/* Footer */}
           <div className="text-center text-amber-600 font-serif">
             <p className="border-t border-amber-800 pt-4">
-              © 2025 RollCall • <span className="italic">May your dice roll high</span> 🎲
+              © 2025 Friend Party • <span className="italic">May your dice roll high</span> 🎲
             </p>
           </div>
         </div>
