@@ -292,6 +292,32 @@
 - **Technical Notes**: Discord OAuth integration with Supabase
 - **Dependencies**: Epic 1 completion
 
+#### Story 4.3: Achievement System
+- **User Story**: As a User, I want to earn achievements for various activities and milestones, so that I have additional goals and recognition for my participation in parties.
+- **Acceptance Criteria**:
+  - AC1: An `achievements` table is created with columns for achievement_id, name, description, icon, category, and unlock_conditions
+  - AC2: A `user_achievements` table tracks which users have earned which achievements with timestamps
+  - AC3: Achievement categories include: Party Participation, Social Interaction, Questionnaire Completion, and Special Events
+  - AC4: Users can view their earned achievements on their profile page with visual indicators
+  - AC5: Achievement notifications appear when users unlock new achievements during party activities
+  - AC6: Achievement progress is tracked and displayed for multi-step achievements
+  - AC7: Achievements are automatically awarded based on user actions (completing questionnaires, joining parties, etc.)
+- **Technical Notes**: Achievement system with automatic tracking and visual feedback
+- **Dependencies**: Epic 1 completion
+
+#### Story 4.4: Avatar System
+- **User Story**: As a User, I want to customize my avatar appearance, so that I can express my personality and make my character more unique in parties.
+- **Acceptance Criteria**:
+  - AC1: An `avatars` table is created with columns for avatar_id, name, category, image_url, and unlock_requirements
+  - AC2: A `user_avatars` table tracks which avatars each user owns and their currently selected avatar
+  - AC3: Avatar categories include: Base Characters, Accessories, Backgrounds, and Special Effects
+  - AC4: Users can browse and select from their owned avatars on their profile page
+  - AC5: Selected avatars are displayed next to user names in party lobbies and results screens
+  - AC6: Some avatars are unlocked through achievements or special events
+  - AC7: Default avatars are available to all users, with premium avatars available through achievements or future monetization
+- **Technical Notes**: Avatar customization system with unlockable content
+- **Dependencies**: Story 4.3 (Achievement System)
+
 ### Epic 5: Early Access Mode
 **Goal**: Implement a controlled early access system that allows for user feedback collection while gating premium features during the initial launch phase.
 

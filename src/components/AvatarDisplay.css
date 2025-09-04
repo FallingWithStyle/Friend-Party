@@ -1,0 +1,124 @@
+.avatar-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar-container {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+}
+
+.avatar-display.avatar-small .avatar-container {
+  width: 40px;
+  height: 40px;
+}
+
+.avatar-display.avatar-medium .avatar-container {
+  width: 64px;
+  height: 64px;
+}
+
+.avatar-display.avatar-large .avatar-container {
+  width: 96px;
+  height: 96px;
+}
+
+.avatar-layers {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-default {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9ecef;
+}
+
+.default-icon {
+  font-size: 1.5rem;
+  color: #6c757d;
+}
+
+.avatar-display.avatar-small .default-icon {
+  font-size: 1rem;
+}
+
+.avatar-display.avatar-large .default-icon {
+  font-size: 2rem;
+}
+
+.avatar-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: center;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-display.avatar-small .avatar-name {
+  font-size: 0.7rem;
+  max-width: 60px;
+}
+
+.avatar-display.avatar-large .avatar-name {
+  font-size: 0.9rem;
+  max-width: 120px;
+}
+
+/* Animation for effects layer */
+.avatar-layer.effects {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Hover effects */
+.avatar-display:hover .avatar-container {
+  border-color: #007bff;
+  transform: scale(1.05);
+  transition: all 0.2s ease;
+}
+
+.avatar-display:hover .avatar-name {
+  color: #007bff;
+  transition: color 0.2s ease;
+}

@@ -9,6 +9,13 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+// Temporarily disabled - features implemented but not yet ready for users
+// import AchievementDisplay from '@/components/AchievementDisplay';
+// import AvatarEditor from '@/components/AvatarEditor';
+// import AvatarDisplay from '@/components/AvatarDisplay';
+// import { useAchievements } from '@/hooks/useAchievements';
+// import { useAvatars } from '@/hooks/useAvatars';
+// import { avatarService } from '@/lib/avatarService';
 import './page.css'; // Import the new CSS file
 
 export default function ProfilePage() {
@@ -16,8 +23,13 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Profile>({ firstName: '', lastName: '' });
+  const [activeTab, setActiveTab] = useState<'profile' | 'achievements' | 'avatar'>('profile');
   const router = useRouter();
   const supabase = createClient();
+  
+  // Temporarily disabled - features implemented but not yet ready for users
+  // const { achievements, progress, isLoading: achievementsLoading, awardAchievement } = useAchievements();
+  // const { avatar, unlockedParts, availableParts, isLoading: avatarsLoading, updateAvatar, unlockPart, refetch: refetchAvatars } = useAvatars();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -59,8 +71,25 @@ export default function ProfilePage() {
       setIsLoading(false);
     };
 
+    // Temporarily disabled - features implemented but not yet ready for users
+    // const initializeAvatar = async () => {
+    //   try {
+    //     // Unlock default avatar parts for new users
+    //     await avatarService.unlockDefaultParts();
+    //     
+    //     // Create default avatar if user doesn't have one
+    //     await avatarService.createDefaultAvatar();
+    //     
+    //     // Refetch avatar data
+    //     await refetchAvatars();
+    //   } catch (error) {
+    //     console.error('Error initializing avatar:', error);
+    //   }
+    // };
+
     fetchProfile();
-  }, [router, supabase]); // Added supabase to dependencies
+    // initializeAvatar();
+  }, [router, supabase]); // Removed refetchAvatars from dependencies
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -117,78 +146,150 @@ export default function ProfilePage() {
       <div className="profile-card">
         <h1 className="profile-title">Your Profile</h1>
 
-        {(isEditing || isProfileEmpty) ? (
-          <form onSubmit={handleSubmit} className="profile-form">
-            <div className="form-group">
-              <label htmlFor="firstName" className="form-label">
-                First Name
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleInputChange}
-                className="form-input"
+        {/* Tab Navigation */}
+        <div className="profile-tabs">
+          <button
+            className={`tab-button ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            Profile
+          </button>
+          {/* Temporarily disabled - features implemented but not yet ready for users */}
+          {/* <button
+            className={`tab-button ${activeTab === 'achievements' ? 'active' : ''}`}
+            onClick={() => setActiveTab('achievements')}
+          >
+            Achievements
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'avatar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('avatar')}
+          >
+            Avatar
+          </button> */}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'profile' && (
+          <>
+            {(isEditing || isProfileEmpty) ? (
+              <form onSubmit={handleSubmit} className="profile-form">
+                <div className="form-group">
+                  <label htmlFor="firstName" className="form-label">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="lastName" className="form-label">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    type="submit"
+                    className="profile-button primary"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setFormData({
+                        firstName: profile.firstName,
+                        lastName: profile.lastName
+                      });
+                    }}
+                    className="profile-button secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="profile-display">
+                {/* Avatar display temporarily disabled */}
+                {/* <div className="profile-avatar-section">
+                  <AvatarDisplay 
+                    avatar={avatar} 
+                    parts={availableParts} 
+                    size="large"
+                    showName={true}
+                    name={`${profile.firstName} ${profile.lastName}`.trim() || 'Anonymous'}
+                  />
+                </div> */}
+                
+                <div className="profile-field">
+                  <p className="profile-label">First Name</p>
+                  <p className="profile-value">{profile.firstName || 'Not set'}</p>
+                </div>
+
+                <div className="profile-field">
+                  <p className="profile-label">Last Name</p>
+                  <p className="profile-value">{profile.lastName || 'Not set'}</p>
+                </div>
+
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="profile-button primary full-width"
+                >
+                  Edit Profile
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Temporarily disabled - features implemented but not yet ready for users */}
+        {/* {activeTab === 'achievements' && (
+          <div className="achievements-tab">
+            {achievementsLoading ? (
+              <div className="loading-message">Loading achievements...</div>
+            ) : (
+              <AchievementDisplay 
+                achievements={achievements} 
+                progress={progress} 
+                showProgress={true}
+                compact={false}
               />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="lastName" className="form-label">
-                Last Name
-              </label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleInputChange}
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-actions">
-              <button
-                type="submit"
-                className="profile-button primary"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditing(false);
-                  setFormData({
-                    firstName: profile.firstName,
-                    lastName: profile.lastName
-                  });
-                }}
-                className="profile-button secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="profile-display">
-            <div className="profile-field">
-              <p className="profile-label">First Name</p>
-              <p className="profile-value">{profile.firstName || 'Not set'}</p>
-            </div>
-
-            <div className="profile-field">
-              <p className="profile-label">Last Name</p>
-              <p className="profile-value">{profile.lastName || 'Not set'}</p>
-            </div>
-
-            <button
-              onClick={() => setIsEditing(true)}
-              className="profile-button primary full-width"
-            >
-              Edit Profile
-            </button>
+            )}
           </div>
         )}
+
+        {activeTab === 'avatar' && (
+          <div className="avatar-tab">
+            {avatarsLoading ? (
+              <div className="loading-message">Loading avatar editor...</div>
+            ) : (
+              <AvatarEditor
+                availableParts={availableParts}
+                unlockedParts={unlockedParts}
+                currentAvatar={avatar}
+                onUpdateAvatar={updateAvatar}
+                onUnlockPart={unlockPart}
+              />
+            )}
+          </div>
+        )} */}
+
         {!isEditing && (
           <div className="profile-back-link-container">
             <Link

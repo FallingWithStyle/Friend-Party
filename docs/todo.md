@@ -103,6 +103,24 @@ Legend:
   - [ ] Supabase OAuth for Discord
   - [ ] On success, authenticate and create user record if new
   - [ ] Capture Discord username and avatar
+- [x] Story 4.3: Achievement System
+  - [x] Create `achievements` table with columns: achievement_id, name, description, icon, category, unlock_conditions (JSONB)
+  - [x] Create `user_achievements` table to track earned achievements with timestamps
+  - [x] Create `user_achievement_progress` table to track progress on multi-step achievements
+  - [x] Define achievement categories: Party Participation, Social Interaction, Questionnaire Completion, Special Events
+  - [x] Add achievement display to user profile page with visual indicators
+  - [x] Implement achievement notification system for new unlocks
+  - [x] Add achievement progress tracking for multi-step achievements
+  - [x] Create automatic achievement awarding system based on user actions
+- [x] Story 4.4: Avatar System
+  - [x] Create `avatar_parts` table with columns: part_id, type (head, skin, eyes, accessories, backgrounds, effects), name, image_url, unlock_requirements (JSONB)
+  - [x] Create `user_avatar_parts` table to track unlocked parts with timestamps
+  - [x] Create `user_avatars` table to track currently equipped avatar configuration by user_id and part_type
+  - [x] Define avatar part categories: Head Shapes/Races, Skin Colors, Facial Features, Accessories, Backgrounds, Special Effects
+  - [x] Add avatar selection interface to user profile page (equip parts individually)
+  - [x] Display composed avatars in party lobbies and results screens
+  - [x] Implement avatar part unlock system through achievements and special events
+  - [x] Create default starter parts for all users with premium options
 
 ## Early Access Mode — PRD §TBD
 - [ ] Feature flag to enable/disable Early Access globally
