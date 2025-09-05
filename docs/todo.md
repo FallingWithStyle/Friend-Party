@@ -112,6 +112,7 @@ Legend:
   - [x] Implement achievement notification system for new unlocks
   - [x] Add achievement progress tracking for multi-step achievements
   - [x] Create automatic achievement awarding system based on user actions
+  - [x] **STATUS: Fully implemented but disabled pending images and detail work**
 - [x] Story 4.4: Avatar System
   - [x] Create `avatar_parts` table with columns: part_id, type (head, skin, eyes, accessories, backgrounds, effects), name, image_url, unlock_requirements (JSONB)
   - [x] Create `user_avatar_parts` table to track unlocked parts with timestamps
@@ -121,6 +122,29 @@ Legend:
   - [x] Display composed avatars in party lobbies and results screens
   - [x] Implement avatar part unlock system through achievements and special events
   - [x] Create default starter parts for all users with premium options
+  - [x] **STATUS: Fully implemented but disabled pending images and detail work**
+  - [ ] Add comprehensive test coverage for avatar system (PRD Story 4.4 Test Coverage Requirements)
+    - [ ] Unit tests for avatar part selection and equipping logic
+    - [ ] Integration tests for avatar display in party lobbies and results
+    - [ ] API tests for avatar unlock and purchase endpoints
+    - [ ] Component tests for avatar editor and selection interfaces
+    - [ ] Database tests for avatar part relationships and user ownership
+- [ ] Story 4.5: Dragon's Hoard Minigame
+  - [ ] Create minigame interface accessible from main menu or party lobby
+  - [ ] Implement treasure collection mechanic with various collectible items
+  - [ ] Design reward system that integrates with avatar parts and achievements
+  - [ ] Create responsive interface that works on desktop and mobile
+  - [ ] Implement progress saving and session persistence
+  - [ ] Add multiple levels or difficulty settings for engagement
+  - [ ] Integrate rewards with existing achievement and avatar systems
+- [ ] Story 4.6: Changeling Minigame
+  - [ ] Create minigame interface accessible from main menu or party lobby
+  - [ ] Implement friend knowledge testing scenarios and questions
+  - [ ] Create scoring system with points and rewards for correct guesses
+  - [ ] Integrate with existing questionnaire data for personalized content
+  - [ ] Design intuitive interface with immediate feedback
+  - [ ] Implement score tracking and comparison with party members
+  - [ ] Create social, competitive experience integrated with party system
 
 ## Early Access Mode — PRD §TBD
 - [ ] Feature flag to enable/disable Early Access globally
@@ -137,6 +161,14 @@ Legend:
   - [ ] Create `early_access_feedback` table + RLS for report storage (id, user_id, party_id, route, context JSON, message, created_at)
   - [ ] API endpoint `POST /api/feedback` to accept reports and persist to DB (and optionally forward to webhook)
   - [ ] Admin view to browse/export feedback
+- [ ] Story 5.5: Test Coverage Improvements
+  - [ ] Achieve minimum 40% overall test coverage (statements and lines)
+  - [ ] Add comprehensive test coverage for avatar system components and APIs
+  - [ ] Add test coverage for achievement system functionality
+  - [ ] Add integration tests for minigame systems (Dragon's Hoard and Changeling)
+  - [ ] Add component tests for all major UI components
+  - [ ] Add API tests for all remaining untested endpoints
+  - [ ] Fix existing test warnings and improve test reliability
 - [ ] Acceptance
   - [ ] Toggling Early Access ON disables paid features for all users
   - [ ] Feedback submissions include page context automatically and appear in admin view

@@ -317,6 +317,38 @@
   - AC7: Default avatars are available to all users, with premium avatars available through achievements or future monetization
 - **Technical Notes**: Avatar customization system with unlockable content
 - **Dependencies**: Story 4.3 (Achievement System)
+- **Test Coverage Requirements**:
+  - TC1: Unit tests for avatar part selection and equipping logic
+  - TC2: Integration tests for avatar display in party lobbies and results
+  - TC3: API tests for avatar unlock and purchase endpoints
+  - TC4: Component tests for avatar editor and selection interfaces
+  - TC5: Database tests for avatar part relationships and user ownership
+
+#### Story 4.5: Dragon's Hoard Minigame
+- **User Story**: As a User, I want to play a fun minigame called "Dragon's Hoard" to earn bonus rewards and enhance my party experience.
+- **Acceptance Criteria**:
+  - AC1: A "Dragon's Hoard" minigame is accessible from the main menu or party lobby
+  - AC2: The minigame features a treasure collection mechanic where users can find and collect various items
+  - AC3: Collected items can be used to unlock special avatar parts, achievements, or party bonuses
+  - AC4: The minigame has a simple, engaging interface that works well on both desktop and mobile
+  - AC5: Progress in the minigame is saved and persists across sessions
+  - AC6: The minigame includes multiple levels or difficulty settings to maintain engagement
+  - AC7: Rewards from the minigame integrate with the existing achievement and avatar systems
+- **Technical Notes**: Standalone minigame with reward integration into existing systems
+- **Dependencies**: Story 4.3 (Achievement System), Story 4.4 (Avatar System)
+
+#### Story 4.6: Changeling Minigame
+- **User Story**: As a User, I want to play a "Changeling" minigame that tests my knowledge of my friends, so that I can earn rewards while having fun.
+- **Acceptance Criteria**:
+  - AC1: A "Changeling" minigame is accessible from the main menu or party lobby
+  - AC2: The minigame presents scenarios where users must guess how their friends would respond to various situations
+  - AC3: Correct guesses earn points and unlock special rewards or achievements
+  - AC4: The minigame uses data from previous party questionnaires to create personalized questions
+  - AC5: The interface is intuitive and provides immediate feedback on answers
+  - AC6: Scores are tracked and can be compared with other party members
+  - AC7: The minigame integrates with the party system to create a social, competitive experience
+- **Technical Notes**: Social minigame leveraging existing questionnaire data for personalized content
+- **Dependencies**: Epic 2 (Questionnaire Engine), Story 4.3 (Achievement System)
 
 ### Epic 5: Early Access Mode
 **Goal**: Implement a controlled early access system that allows for user feedback collection while gating premium features during the initial launch phase.
@@ -363,6 +395,19 @@
   - AC5: System provides clear status indicators for early access mode state
 - **Technical Notes**: Admin controls for early access lifecycle management
 - **Dependencies**: Story 5.2, Story 5.3
+
+#### Story 5.5: Test Coverage Improvements
+- **User Story**: As a Developer, I want to improve test coverage across the application, so that we can ensure reliability and maintainability as we add new features.
+- **Acceptance Criteria**:
+  - AC1: Achieve minimum 40% overall test coverage (statements and lines)
+  - AC2: Add comprehensive test coverage for avatar system components and APIs
+  - AC3: Add test coverage for achievement system functionality
+  - AC4: Add integration tests for minigame systems (Dragon's Hoard and Changeling)
+  - AC5: Add component tests for all major UI components
+  - AC6: Add API tests for all remaining untested endpoints
+  - AC7: Fix existing test warnings and improve test reliability
+- **Technical Notes**: Comprehensive test coverage improvement focusing on business logic and critical user flows
+- **Dependencies**: Epic 4 completion
 
 ## 7. Constraints and Assumptions
 - **Technical Constraints**: 
