@@ -1,59 +1,120 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Friend-Party
 
-## Setup
+A lightweight social web application where users create parties, answer questionnaires about themselves and each other, and receive calculated D&D-style character sheets based on collective input.
 
-- Create an `.env` at the repo root with:
+## Overview
 
+Friend-Party is a fun, engaging way for friends to see how they perceive each other through gamified personality profiling using D&D-style stats and classes. Users create parties, answer questionnaires about themselves and each other, and receive calculated D&D-style character sheets based on collective input.
+
+## Features
+
+- **Party Creation**: Create and join parties with unique 6-letter codes
+- **Questionnaire System**: Self-assessment and peer-assessment questionnaires
+- **D&D-Style Results**: Calculated character sheets with stats and classes
+- **Real-time Updates**: Live party status and member updates
+- **Social Features**: Adventurer name proposals, party mottos, hirelings
+- **Achievement System**: Unlock achievements and customize avatars
+- **Responsive Design**: Works on desktop and mobile devices
+- **Shareable Results**: Public links to share party results
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Supabase account (for database)
+
+### Installation
+
+```bash
+git clone https://github.com/your-org/friend-party.git
+cd friend-party
+npm install
 ```
+
+### Configuration
+
+Create an `.env` file at the repo root:
+
+```bash
 NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-- If you use Supabase local stack:
-```
+For Supabase local stack:
+```bash
 # after `npx supabase start`
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=PASTE_LOCAL_ANON_KEY
 ```
 
-- Install deps and run:
-```
-npm install
-npm run dev
-```
-
-## Getting Started
-
-First, run the development server:
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application will be available at [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Basic Gameplay
 
-## Learn More
+1. **Create Party**: Start a new party and get a unique 6-letter code
+2. **Invite Friends**: Share the code with friends to join your party
+3. **Answer Questions**: Complete self-assessment and peer-assessment questionnaires
+4. **View Results**: See everyone's D&D-style character sheets
+5. **Share Results**: Share your party's results with others
 
-To learn more about Next.js, take a look at the following resources:
+### Advanced Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Adventurer Names**: Propose and vote on cool names for party members
+- **Party Mottos**: Create and vote on a motto for your party
+- **Hirelings**: Include non-participating friends in assessments
+- **Achievements**: Unlock achievements and customize avatars
+- **Party Morale**: Track party morale and affect leader decisions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+/friend-party
+  ├── src/                    # Source code
+  │   ├── app/               # Next.js App Router pages
+  │   │   ├── api/           # API endpoints
+  │   │   ├── party/         # Party management pages
+  │   │   └── profile/       # User profile pages
+  │   ├── components/        # React components
+  │   │   ├── common/        # Shared components
+  │   │   └── ui/            # UI components
+  │   ├── hooks/             # Custom React hooks
+  │   ├── lib/               # Utilities and services
+  │   └── types/             # TypeScript type definitions
+  ├── database/              # Database migrations and seeds
+  ├── docs/                  # Documentation
+  │   ├── prd.md            # Product Requirements Document
+  │   └── todo.md           # Project TODO list
+  ├── README.md              # Project overview (this file)
+  ├── prd.md                 # Product Requirements Document
+  └── task-list.md           # Task list and progress tracking
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Contributing
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/new-feature`)
+3. Commit changes (`git commit -m 'Add new feature'`)
+4. Push to the branch (`git push origin feature/new-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT License
+
+## Acknowledgements
+
+- D&D 5e rules and classes for inspiration
+- Next.js and React communities for excellent tooling
+- Supabase for database and authentication services
+- Tailwind CSS for the utility-first approach
