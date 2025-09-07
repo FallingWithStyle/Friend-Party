@@ -48,7 +48,7 @@ export async function getMoraleSettings(supabase?: Awaited<ReturnType<typeof cre
   ];
 
   const { data, error } = await client
-    .from('app_settings')
+    .from('friendparty.app_settings')
     .select('key, value')
     .in('key', keys as string[]);
 

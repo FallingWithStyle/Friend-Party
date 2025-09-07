@@ -33,7 +33,7 @@ export async function POST(
 
   // 1. Get the party_id from the party code
   const { data: party, error: partyError } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id')
     .eq('code', code)
     .single();
@@ -47,7 +47,7 @@ export async function POST(
 
   // 2. Get the proposing member's party_member id
   const { data: proposingMember, error: proposingMemberError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id')
     .eq('user_id', user.id)
     .eq('party_id', party.id)
@@ -65,7 +65,7 @@ export async function POST(
 
   // 3. Insert the new name proposal
   const { data: newProposal, error: insertError } = await supabase
-    .from('name_proposals')
+    .from('friendparty.name_proposals')
     .insert({
       party_id: party.id,
       target_member_id,

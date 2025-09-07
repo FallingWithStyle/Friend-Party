@@ -75,7 +75,7 @@ const usePartyStore = create<PartyState>((set) => ({
     set({ loading: true, error: null });
     try {
       const { data: party, error: partyError } = await supabase
-        .from('parties')
+        .from('friendparty.parties')
         .select('*')
         .eq('code', code)
         .single();
@@ -88,7 +88,7 @@ const usePartyStore = create<PartyState>((set) => ({
       }
 
       const { data: members, error: membersError } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('*')
         .eq('party_id', party.id);
 

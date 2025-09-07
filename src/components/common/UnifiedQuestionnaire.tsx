@@ -64,7 +64,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
     const fetchQuestions = async () => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('questions')
+        .from('friendparty.questions')
         .select('id, question_text, question_type, answer_options')
         .eq('question_type', questionType);
  
@@ -183,7 +183,7 @@ export const UnifiedQuestionnaire = ({ partyCode, questionType }: UnifiedQuestio
         }),
       });
     }
-    const { error } = await supabase.from('answers').insert(answersToSubmit);
+    const { error } = await supabase.from('friendparty.answers').insert(answersToSubmit);
 
     if (error) {
       console.error('Error submitting answers:', error);

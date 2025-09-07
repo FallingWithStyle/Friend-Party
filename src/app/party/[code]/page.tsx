@@ -109,7 +109,7 @@ export default function PartyLobbyPage() {
   useEffect(() => {
     const fetchUserMember = async () => {
       if (user && party) { // Only fetch if user and party are available
-        const { data } = await supabase.from('party_members').select('*').eq('party_id', party.id).eq('user_id', user.id).single();
+        const { data } = await supabase.from('friendparty.party_members').select('*').eq('party_id', party.id).eq('user_id', user.id).single();
         setCurrentUserMember(data);
       } else if (!user && !userLoading) {
         // If no user and not loading, redirect to home (login)
@@ -123,13 +123,13 @@ export default function PartyLobbyPage() {
     if (!party) return;
 
     const fetchData = async () => {
-       const { data: memberData } = await supabase.from('party_members').select('*').eq('party_id', party.id).order('created_at');
+       const { data: memberData } = await supabase.from('friendparty.party_members').select('*').eq('party_id', party.id).order('created_at');
        if (memberData) setMembers(memberData);
 
-       const { data: proposalData } = await supabase.from('name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
+       const { data: proposalData } = await supabase.from('friendparty.name_proposals').select('*').eq('party_id', party.id).eq('is_active', true);
        if (proposalData) setProposals(proposalData);
 
-       const { data: voteData } = await supabase.from('name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
+       const { data: voteData } = await supabase.from('friendparty.name_proposal_votes').select('*, proposal:name_proposals!inner(party_id)').eq('proposal.party_id', party.id);
        if (voteData) setVotes(voteData as VoteWithProposalParty[]);
 
        // Fetch motto data via API aggregator
@@ -162,7 +162,7 @@ export default function PartyLobbyPage() {
        const memberIds = (memberData ?? []).map((m: { id: string }) => m.id);
        if (memberIds.length > 0) {
          const { data: hirelingVoteData, error: hirelingVoteError } = await supabase
-           .from('hireling_conversion_votes')
+           .from('friendparty.hireling_conversion_votes')
            .select('party_member_id_being_voted_on, vote')
            .in('party_member_id_being_voted_on', memberIds);
          if (hirelingVoteError) console.error('Error fetching hireling votes:', hirelingVoteError);
@@ -487,7 +487,7 @@ export default function PartyLobbyPage() {
       try {
         // Check for self-assessment completion
         const { data: selfAnswers, error: selfError } = await supabase
-          .from('answers')
+          .from('friendparty.answers')
           .select('id')
           .eq('voter_member_id', currentUserMember.id)
           .eq('subject_member_id', currentUserMember.id);
@@ -497,7 +497,7 @@ export default function PartyLobbyPage() {
 
         // Check for peer-assessment completion
         const { data: peerAnswers, error: peerError } = await supabase
-          .from('answers')
+          .from('friendparty.answers')
           .select('id')
           .eq('voter_member_id', currentUserMember.id)
           .not('subject_member_id', 'eq', currentUserMember.id);

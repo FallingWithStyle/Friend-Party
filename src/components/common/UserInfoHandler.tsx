@@ -53,7 +53,7 @@ export const UserInfoHandler = () => {
           const updateMemberName = async () => {
             const supabase = createClient();
             await supabase
-              .from('party_members')
+              .from('friendparty.party_members')
               .update({ first_name: firstName, last_name: lastName })
               .eq('id', currentMember?.id);
           };

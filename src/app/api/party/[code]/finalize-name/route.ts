@@ -33,7 +33,7 @@ export async function POST(
 
   // 1. Get the selected proposal details
   const { data: proposal, error: proposalError } = await supabase
-    .from('name_proposals')
+    .from('friendparty.name_proposals')
     .select('party_id, target_member_id, proposed_name')
     .eq('id', proposal_id)
     .single();
@@ -47,7 +47,7 @@ export async function POST(
 
   // 2. Get the current user's party member details
   const { data: member, error: memberError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id, is_leader')
     .eq('user_id', user.id)
     .eq('party_id', proposal.party_id)
@@ -66,7 +66,7 @@ export async function POST(
   // 3. Server-side Tie-breaking Validation
   // Fetch all active proposals for this naming event to calculate votes.
   const { data: activeProposals, error: proposalsError } = await supabase
-    .from('name_proposals')
+    .from('friendparty.name_proposals')
     .select('id')
     .eq('party_id', proposal.party_id)
     .eq('target_member_id', proposal.target_member_id)
@@ -80,7 +80,7 @@ export async function POST(
 
   // Fetch all votes for the active proposals
   const { data: votes, error: votesError } = await supabase
-    .from('name_proposal_votes')
+    .from('friendparty.name_proposal_votes')
     .select('proposal_id')
     .in('proposal_id', proposalIds);
 
@@ -126,7 +126,7 @@ export async function POST(
 
   // 5. Update the adventurer's name
   const { error: updateNameError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .update({ adventurer_name: proposal.proposed_name })
     .eq('id', proposal.target_member_id);
 
@@ -143,7 +143,7 @@ export async function POST(
 
   // 6. Deactivate all proposals for this naming event
   const { error: deactivateProposalsError } = await supabase
-    .from('name_proposals')
+    .from('friendparty.name_proposals')
     .update({ is_active: false })
     .eq('party_id', proposal.party_id)
     .eq('target_member_id', proposal.target_member_id)

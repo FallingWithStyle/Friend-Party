@@ -35,7 +35,7 @@ export async function POST(
 
     // Resolve party by code
     const { data: party, error: partyErr } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .select('id')
       .eq('code', code)
       .single();
@@ -46,7 +46,7 @@ export async function POST(
 
     // Resolve member in this party
     const { data: meMember, error: meErr } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('id')
       .eq('party_id', party.id)
       .eq('user_id', userResp.user.id)
@@ -58,7 +58,7 @@ export async function POST(
 
     // Insert proposal using normalized columns only
     const { data: inserted, error: insErr } = await supabase
-      .from('party_motto_proposals')
+      .from('friendparty.party_motto_proposals')
       .insert({
         party_id: party.id,
         proposed_by_member_id: meMember.id,
@@ -78,7 +78,7 @@ export async function POST(
     try {
       // 1) Members and completion rate
       const { data: pmRows } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('id, is_npc, assessment_status')
         .eq('party_id', party.id);
 
@@ -90,7 +90,7 @@ export async function POST(
 
       // 2) Active proposals and proposal rate
       const { data: activeProps } = await supabase
-        .from('party_motto_proposals')
+        .from('friendparty.party_motto_proposals')
         .select('id')
         .eq('party_id', party.id)
         .eq('active', true);
@@ -102,7 +102,7 @@ export async function POST(
       let votingRate = 0;
       if (activeProposalIds.length > 0) {
         const { data: votes } = await supabase
-          .from('party_motto_votes')
+          .from('friendparty.party_motto_votes')
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
@@ -118,7 +118,7 @@ export async function POST(
       let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
       try {
         const { data: prevParty } = await supabase
-          .from('parties')
+          .from('friendparty.parties')
           .select('morale_level')
           .eq('id', party.id)
           .maybeSingle();
@@ -128,7 +128,7 @@ export async function POST(
       const nextLevel = resolveMoraleLevel(morale, previousLevel);
 
       await supabase
-        .from('parties')
+        .from('friendparty.parties')
         .update({ morale_score: morale, morale_level: nextLevel })
         .eq('id', party.id);
     } catch (moraleErr) {

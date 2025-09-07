@@ -106,7 +106,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             console.log("API call successful, checking status...");
             try {
               const { error: partyUpdateErr } = await supabase
-                .from('parties')
+                .from('friendparty.parties')
                 .update({ status: 'Results' })
                 .eq('id', partyId);
               if (partyUpdateErr) {
@@ -129,7 +129,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
     const fetchResults = useCallback(async (currentPartyId: string) => {
         if (!supabase) return;
         const { data: party, error: partyErr } = await supabase
-          .from('parties')
+          .from('friendparty.parties')
           .select('status, motto, morale_score, morale_level')
           .eq('id', currentPartyId)
           .single();
@@ -139,7 +139,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
         const rawLevel = typeof party?.morale_level === 'string' ? party.morale_level : null;
         setPartyMorale({ score: rawScore, level: rawLevel });
         const { data: membersData, error: membersError } = await supabase
-            .from('party_members')
+            .from('friendparty.party_members')
             .select('id, first_name, strength, dexterity, charisma, intelligence, wisdom, constitution, class, status, exp, is_npc')
             .eq('party_id', currentPartyId);
         if (membersError) throw membersError;
@@ -166,7 +166,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
 
         try {
             const { data: party, error: partyStatusError } = await supabase
-                .from('parties')
+                .from('friendparty.parties')
                 .select('status')
                 .eq('id', currentPartyId)
                 .single();
@@ -180,7 +180,7 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
             } else {
                 setCurrentStep(1); // Waiting for party members
                 const { data: members, error: membersError } = await supabase
-                    .from('party_members')
+                    .from('friendparty.party_members')
                     .select('first_name, assessment_status, is_npc')
                     .eq('party_id', currentPartyId)
                     .eq('is_npc', false);

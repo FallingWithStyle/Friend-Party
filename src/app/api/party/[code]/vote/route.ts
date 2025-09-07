@@ -33,7 +33,7 @@ export async function POST(
 
   // 1. Get the proposal details to verify party and target member
   const { data: proposal, error: proposalError } = await supabase
-    .from('name_proposals')
+    .from('friendparty.name_proposals')
     .select('party_id, target_member_id')
     .eq('id', proposal_id)
     .single();
@@ -47,7 +47,7 @@ export async function POST(
 
   // 2. Get the voter's party_member id and verify they are in the correct party
   const { data: voterMember, error: voterMemberError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id')
     .eq('user_id', user.id)
     .eq('party_id', proposal.party_id)
@@ -76,7 +76,7 @@ export async function POST(
 
   // 4. Insert the vote. The DB unique constraint will prevent duplicate votes.
   const { data: newVote, error: insertError } = await supabase
-    .from('name_proposal_votes')
+    .from('friendparty.name_proposal_votes')
     .insert({
       proposal_id,
       voter_member_id: voterMember.id,

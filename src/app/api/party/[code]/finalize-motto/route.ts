@@ -28,7 +28,7 @@ export async function POST(
 
   // Resolve party by code (need id, and optionally leader_id to check leader role if modeled that way)
   const { data: party, error: partyErr } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id')
     .eq('code', code)
     .single();
@@ -39,7 +39,7 @@ export async function POST(
 
   // Resolve user's party_member and leader flag if modeled
   const { data: meMember, error: meErr } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id, is_leader')
     .eq('party_id', party.id)
     .eq('user_id', userResp.user.id)
@@ -57,7 +57,7 @@ export async function POST(
 
   // Validate proposal belongs to the party and is still active
   const { data: proposal, error: propErr } = await supabase
-    .from('party_motto_proposals')
+    .from('friendparty.party_motto_proposals')
     .select('id, party_id, text, active, is_finalized')
     .eq('id', proposalId)
     .single();
@@ -73,7 +73,7 @@ export async function POST(
   // We rely on service role in server environment to bypass strict RLS update limitations on proposals.
   // 1) Set party motto
   const { error: partyUpdErr } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .update({ motto: proposal.text })
     .eq('id', party.id);
 
@@ -83,7 +83,7 @@ export async function POST(
 
   // 2) Mark chosen proposal finalized
   const { error: markFinalErr } = await supabase
-    .from('party_motto_proposals')
+    .from('friendparty.party_motto_proposals')
     .update({ is_finalized: true })
     .eq('id', proposal.id);
 
@@ -93,7 +93,7 @@ export async function POST(
 
   // 3) Deactivate all proposals in this party (closes voting)
   const { error: deactivateErr } = await supabase
-    .from('party_motto_proposals')
+    .from('friendparty.party_motto_proposals')
     .update({ active: false })
     .eq('party_id', party.id);
 

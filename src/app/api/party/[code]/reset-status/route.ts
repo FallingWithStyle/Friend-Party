@@ -23,7 +23,7 @@ export async function POST(
 
     // Get party ID
     const { data: partyData, error: partyError } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .select('id')
       .eq('code', partyCode)
       .single();
@@ -38,7 +38,7 @@ export async function POST(
     // Delete related data
     // First, get all member IDs for the party to correctly delete answers and votes
     const { data: memberIdsData, error: memberIdsError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('id')
       .eq('party_id', partyId);
 
@@ -50,20 +50,20 @@ export async function POST(
     const memberIds = memberIdsData.map(m => m.id);
 
     if (memberIds.length > 0) {
-      await supabase.from('answers').delete().in('voter_member_id', memberIds);
-      await supabase.from('name_proposal_votes').delete().in('voter_member_id', memberIds);
+      await supabase.from('friendparty.answers').delete().in('voter_member_id', memberIds);
+      await supabase.from('friendparty.name_proposal_votes').delete().in('voter_member_id', memberIds);
       // Clear motto votes cast by these members (via voter_member_id)
-      await supabase.from('party_motto_votes').delete().in('voter_member_id', memberIds);
+      await supabase.from('friendparty.party_motto_votes').delete().in('voter_member_id', memberIds);
     }
     
-    await supabase.from('name_proposals').delete().eq('party_id', partyId);
+    await supabase.from('friendparty.name_proposals').delete().eq('party_id', partyId);
     // Delete motto proposals (cascades will also remove votes if any remain)
-    await supabase.from('party_motto_proposals').delete().eq('party_id', partyId);
-    await supabase.from('peer_assessment_assignments').delete().eq('party_id', partyId);
+    await supabase.from('friendparty.party_motto_proposals').delete().eq('party_id', partyId);
+    await supabase.from('friendparty.peer_assessment_assignments').delete().eq('party_id', partyId);
 
     // Reset party members status
     const { error: memberUpdateError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .update({ status: 'Lobby', adventurer_name: null, strength: null, dexterity: null, constitution: null, intelligence: null, wisdom: null, charisma: null, character_class: null, class: null, exp: 0 })
       .eq('party_id', partyId);
 
@@ -74,7 +74,7 @@ export async function POST(
 
     // Reset party status
     const { error: partyUpdateError } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .update({ status: 'Lobby' })
       .eq('id', partyId);
 

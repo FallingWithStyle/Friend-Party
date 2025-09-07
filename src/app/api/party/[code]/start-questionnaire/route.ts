@@ -34,7 +34,7 @@ export async function POST(
 
   // First, check if the distribution has been generated for this party
   const { data: party, error: partyError } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id, status')
     .eq('code', code)
     .single();
@@ -52,7 +52,7 @@ export async function POST(
   // Always attempt to generate assignments for this member as assessor
   // Check if assignments already exist for this member as assessor
   const { data: existingAssignments, error: assignmentsError } = await supabase
-    .from('peer_assessment_assignments')
+    .from('friendparty.peer_assessment_assignments')
     .select('id')
     .eq('party_id', party.id)
     .eq('assessor_member_id', member_id);
@@ -68,7 +68,7 @@ export async function POST(
   if (!existingAssignments || existingAssignments.length === 0) {
     // Get all party members (including NPCs)
     const { data: members, error: membersError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('id')
       .eq('party_id', party.id);
 
@@ -84,7 +84,7 @@ export async function POST(
 
     // Get all peer-assessment questions
     const { data: questions, error: questionsError } = await supabase
-      .from('questions')
+      .from('friendparty.questions')
       .select('id')
       .eq('question_type', 'peer-assessment');
 
@@ -117,7 +117,7 @@ export async function POST(
 
     if (assignments.length > 0) {
       const { error: insertError } = await supabase
-        .from('peer_assessment_assignments')
+        .from('friendparty.peer_assessment_assignments')
         .upsert(assignments, { onConflict: 'party_id,question_id,assessor_member_id,subject_member_id' });
       if (insertError) {
         console.error('Error inserting peer assessment assignments:', insertError);
@@ -131,7 +131,7 @@ export async function POST(
   // End assignment generation block
 
   const { error } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .update({ status: 'Peer Assessment' })
     .eq('id', member_id)
     .eq('user_id', user.id);

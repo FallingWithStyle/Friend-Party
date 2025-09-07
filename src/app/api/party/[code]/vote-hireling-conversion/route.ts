@@ -56,7 +56,7 @@ export async function POST(
 
   // 3. Fetch party, voter, target
   const { data: party, error: partyError } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id, party_members ( id, user_id, is_npc )')
     .eq('code', partyCode)
     .single();
@@ -88,7 +88,7 @@ export async function POST(
 
   // 5. Upsert vote
   const { error: voteError } = await supabase
-    .from('hireling_conversion_votes')
+    .from('friendparty.hireling_conversion_votes')
     .upsert(
       {
         party_member_id_being_voted_on: target_party_member_id,
@@ -118,7 +118,7 @@ export async function POST(
   let yesCount = 0;
   if (vote) {
     const { data: yesVotes, error: countError } = await supabase
-      .from('hireling_conversion_votes')
+      .from('friendparty.hireling_conversion_votes')
       .select('id')
       .eq('party_member_id_being_voted_on', target_party_member_id)
       .eq('vote', true);
@@ -132,7 +132,7 @@ export async function POST(
     if (yesCount === eligibleVoterCount) {
       // Convert to hireling
       const { error: updateError } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .update({ is_npc: true, status: 'Finished' })
         .eq('id', target_party_member_id);
 
@@ -149,7 +149,7 @@ export async function POST(
       // Prefill missing self-assessment answers with neutral baseline
       // Note: answers.answer_value is TEXT; use '9' to match schema
       const { data: selfAssessmentQuestions, error: questionsError } = await supabase
-        .from('questions')
+        .from('friendparty.questions')
         .select('id')
         .eq('question_type', 'self-assessment');
 
@@ -159,7 +159,7 @@ export async function POST(
       }
 
       const { data: existingSelfAnswers, error: existingAnswersError } = await supabase
-        .from('answers')
+        .from('friendparty.answers')
         .select('question_id')
         .eq('voter_member_id', target_party_member_id)
         .eq('subject_member_id', target_party_member_id);
@@ -183,7 +183,7 @@ export async function POST(
       }
 
       if (toInsert.length > 0) {
-        const { error: insertAnswersError } = await supabase.from('answers').insert(toInsert);
+        const { error: insertAnswersError } = await supabase.from('friendparty.answers').insert(toInsert);
         if (insertAnswersError) {
           console.error('Error inserting neutral answers:', insertAnswersError);
           return new Response('Error pre-filling answers', { status: 500 });

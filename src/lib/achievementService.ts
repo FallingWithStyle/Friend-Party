@@ -86,7 +86,7 @@ class AchievementService {
 
       // Get user's party statistics
       const { data: partyStats } = await this.supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('party_id, is_leader')
         .eq('user_id', user.id);
 
@@ -97,12 +97,12 @@ class AchievementService {
 
       // Get user's voting statistics
       const { data: votes } = await this.supabase
-        .from('name_proposal_votes')
+        .from('friendparty.name_proposal_votes')
         .select('id')
         .eq('voter_member_id', user.id);
 
       const { data: mottoVotes } = await this.supabase
-        .from('party_motto_votes')
+        .from('friendparty.party_motto_votes')
         .select('id')
         .eq('voter_member_id', user.id);
 
@@ -110,12 +110,12 @@ class AchievementService {
 
       // Get user's proposal statistics
       const { data: nameProposals } = await this.supabase
-        .from('name_proposals')
+        .from('friendparty.name_proposals')
         .select('id')
         .eq('proposing_member_id', user.id);
 
       const { data: mottoProposals } = await this.supabase
-        .from('party_motto_proposals')
+        .from('friendparty.party_motto_proposals')
         .select('id')
         .eq('proposed_by_member_id', user.id);
 
@@ -124,7 +124,7 @@ class AchievementService {
 
       // Get user's assessment statistics
       const { data: selfAssessments } = await this.supabase
-        .from('answers')
+        .from('friendparty.answers')
         .select('id')
         .eq('voter_member_id', user.id)
         .eq('subject_member_id', user.id);

@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
 
     // 1. Fetch all necessary data
     const { data: party_members, error: membersError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('id, user_id, party_id, first_name, status, is_npc, strength, dexterity, constitution, intelligence, wisdom, charisma')
       .eq('party_id', party_id);
     if (membersError) throw membersError;
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     const memberIds = party_members.map((m) => m.id);
 
     const { data: answers, error: answersError } = await supabase
-      .from('answers')
+      .from('friendparty.answers')
       .select('*')
       .in('voter_member_id', memberIds);
     if (answersError) throw answersError;
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     const membersById = new Map<string, PartyMember>(party_members.map((m) => [m.id, m as PartyMember]));
 
     const { data: questions, error: questionsError } = await supabase
-      .from('questions')
+      .from('friendparty.questions')
       .select('id, stat_id, question_type');
     if (questionsError) throw questionsError;
     console.log('Fetched questions:', questions);
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
 
       const safeInsertDebug = async (payload: Record<string, unknown>) => {
         try {
-          await supabase.from('debug_stat_changes').insert(payload);
+          await supabase.from('friendparty.debug_stat_changes').insert(payload);
         } catch (e) {
           console.warn('debug_stat_changes insert skipped:', e?.message ?? e);
         }
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
 
       await (async () => {
         try {
-          await supabase.from('debug_stat_changes').insert({
+          await supabase.from('friendparty.debug_stat_changes').insert({
             party_member_id: member.id,
             member_name: member.first_name,
             change_source: 'final-stats-with-peer-assessment',
@@ -322,7 +322,7 @@ Deno.serve(async (req) => {
 
     // 4. Update database
     const { data: partyStatus, error: statusError } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .select('status')
       .eq('id', party_id)
       .single();
@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
     }
 
     console.log('Updating party members with final results:', JSON.stringify(finalResults, null, 2));
-    const { error: updateError } = await supabase.from('party_members').upsert(finalResults);
+    const { error: updateError } = await supabase.from('friendparty.party_members').upsert(finalResults);
     if (updateError) {
       console.error('Error upserting final results:', updateError);
       throw updateError;
@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
     console.log('Successfully upserted final results.');
 
     const { error: partyUpdateError } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .update({ status: 'ResultsReady' })
       .eq('id', party_id);
     if (partyUpdateError) {

@@ -31,7 +31,7 @@ export async function GET(
 
   // 2) Party by code
   const { data: party, error: partyError } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id')
     .eq('code', code)
     .single();
@@ -47,7 +47,7 @@ export async function GET(
 
   // 3) Assessor member (current user) in this party
   const { data: member, error: memberError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id')
     .eq('party_id', party.id)
     .eq('user_id', user.id)
@@ -64,7 +64,7 @@ export async function GET(
 
   // 4) Fetch existing assignments for this assessor
   const { data: existing, error: existingErr } = await supabase
-    .from('peer_assessment_assignments')
+    .from('friendparty.peer_assessment_assignments')
     .select('question_id, subject_member_id')
     .eq('party_id', party.id)
     .eq('assessor_member_id', member.id);
@@ -87,7 +87,7 @@ export async function GET(
 
   // 5a) Get all party members (including NPCs). Assessor will not assess self.
   const { data: members, error: membersError } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id')
     .eq('party_id', party.id);
 
@@ -101,7 +101,7 @@ export async function GET(
 
   // 5b) Get all peer-assessment questions
   const { data: questions, error: questionsError } = await supabase
-    .from('questions')
+    .from('friendparty.questions')
     .select('id')
     .eq('question_type', 'peer-assessment');
 
@@ -139,7 +139,7 @@ export async function GET(
   if (toInsert.length > 0) {
     // Upsert with composite conflict key if defined server-side
     const { error: insertError } = await supabase
-      .from('peer_assessment_assignments')
+      .from('friendparty.peer_assessment_assignments')
       .upsert(toInsert, {
         onConflict: 'party_id,question_id,assessor_member_id,subject_member_id',
       });
@@ -155,7 +155,7 @@ export async function GET(
 
   // 6) Re-fetch and return
   const { data: generated, error: genErr } = await supabase
-    .from('peer_assessment_assignments')
+    .from('friendparty.peer_assessment_assignments')
     .select('question_id, subject_member_id')
     .eq('party_id', party.id)
     .eq('assessor_member_id', member.id);

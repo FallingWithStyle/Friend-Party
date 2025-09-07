@@ -10,7 +10,7 @@ class AvatarService {
 
       // Find avatar parts that require this achievement
       const { data: parts, error } = await this.supabase
-        .from('avatar_parts')
+        .from('friendparty.avatar_parts')
         .select('*')
         .contains('unlock_requirements', { achievement_id: achievementId });
 
@@ -26,7 +26,7 @@ class AvatarService {
       for (const part of parts) {
         // Check if user already has this part
         const { data: existingPart } = await this.supabase
-          .from('user_avatar_parts')
+          .from('friendparty.user_avatar_parts')
           .select('id')
           .eq('user_id', user.id)
           .eq('part_id', part.part_id)
@@ -36,7 +36,7 @@ class AvatarService {
 
         // Unlock the part
         const { data: unlockedPart, error: unlockError } = await this.supabase
-          .from('user_avatar_parts')
+          .from('friendparty.user_avatar_parts')
           .insert({
             user_id: user.id,
             part_id: part.part_id
@@ -69,7 +69,7 @@ class AvatarService {
 
       // Get all default avatar parts
       const { data: defaultParts, error } = await this.supabase
-        .from('avatar_parts')
+        .from('friendparty.avatar_parts')
         .select('*')
         .eq('is_default', true);
 
@@ -85,7 +85,7 @@ class AvatarService {
       for (const part of defaultParts) {
         // Check if user already has this part
         const { data: existingPart } = await this.supabase
-          .from('user_avatar_parts')
+          .from('friendparty.user_avatar_parts')
           .select('id')
           .eq('user_id', user.id)
           .eq('part_id', part.part_id)
@@ -95,7 +95,7 @@ class AvatarService {
 
         // Unlock the part
         const { data: unlockedPart, error: unlockError } = await this.supabase
-          .from('user_avatar_parts')
+          .from('friendparty.user_avatar_parts')
           .insert({
             user_id: user.id,
             part_id: part.part_id
@@ -137,7 +137,7 @@ class AvatarService {
 
       // Get default parts for each type
       const { data: defaultParts, error } = await this.supabase
-        .from('avatar_parts')
+        .from('friendparty.avatar_parts')
         .select('*')
         .eq('is_default', true)
         .order('type')

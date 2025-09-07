@@ -16,7 +16,7 @@ export async function POST(
     const statusToUpdate = assessmentType === 'self-assessment' ? 'SelfAssessmentCompleted' : 'PeerAssessmentCompleted';
 
     const { error: updateError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .update({ assessment_status: statusToUpdate })
       .eq('id', memberId);
 
@@ -26,7 +26,7 @@ export async function POST(
 
     // Check if all members are finished
     const { data: partyData, error: partyError } = await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .select('id')
       .eq('code', code)
       .single();
@@ -38,7 +38,7 @@ export async function POST(
     // After updating member status, recalculate party status as the minimum of all member statuses
     // Fetch all member statuses
     const { data: allMembers, error: allMembersError } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('status')
       .eq('party_id', partyData.id);
 
@@ -60,13 +60,13 @@ export async function POST(
 
     // Update party status if needed
     await supabase
-      .from('parties')
+      .from('friendparty.parties')
       .update({ status: newPartyStatus })
       .eq('id', partyData.id);
 
     if (assessmentType === 'self-assessment') {
       const { count: unfinishedCount, error: countError } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('*', { count: 'exact', head: true })
         .eq('party_id', partyData.id)
         .eq('is_npc', false)
@@ -78,13 +78,13 @@ export async function POST(
 
       if (unfinishedCount === 0) {
         await supabase
-          .from('parties')
+          .from('friendparty.parties')
           .update({ status: 'Peer Assessment' })
           .eq('id', partyData.id);
       }
     } else if (assessmentType === 'peer-assessment') {
       const { count: unfinishedCount, error: countError } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('*', { count: 'exact', head: true })
         .eq('party_id', partyData.id)
         .eq('is_npc', false)
@@ -97,7 +97,7 @@ export async function POST(
       // If all non-NPC members have completed peer assessment, mark Results and invoke calculation
       if (unfinishedCount === 0) {
         const { error: statusErr } = await supabase
-          .from('parties')
+          .from('friendparty.parties')
           .update({ status: 'Results' })
           .eq('id', partyData.id);
         if (statusErr) {
@@ -114,7 +114,7 @@ export async function POST(
           }
           try {
             const { error: readyErr } = await supabase
-              .from('parties')
+              .from('friendparty.parties')
               .update({ status: 'ResultsReady' })
               .eq('id', partyData.id);
             if (readyErr) {
@@ -131,7 +131,7 @@ export async function POST(
     try {
       // 1) Members and completion
       const { data: pmRows } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('id, is_npc, assessment_status')
         .eq('party_id', partyData.id);
 
@@ -141,7 +141,7 @@ export async function POST(
 
       // 2) Active proposals
       const { data: activeProps } = await supabase
-        .from('party_motto_proposals')
+        .from('friendparty.party_motto_proposals')
         .select('id, active')
         .eq('party_id', partyData.id)
         .eq('active', true);
@@ -153,7 +153,7 @@ export async function POST(
       let votingRate = 0;
       if (activeProposalIds.length > 0) {
         const { data: votes } = await supabase
-          .from('party_motto_votes')
+          .from('friendparty.party_motto_votes')
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
@@ -169,7 +169,7 @@ export async function POST(
       let previousLevel: 'Low' | 'Neutral' | 'High' | null = null;
       try {
         const { data: prevParty } = await supabase
-          .from('parties')
+          .from('friendparty.parties')
           .select('morale_level')
           .eq('id', partyData.id)
           .maybeSingle();
@@ -179,7 +179,7 @@ export async function POST(
       const nextLevel = resolveMoraleLevel(score, previousLevel);
 
       await supabase
-        .from('parties')
+        .from('friendparty.parties')
         .update({ morale_score: score, morale_level: nextLevel })
         .eq('id', partyData.id);
     } catch (e) {
@@ -190,7 +190,7 @@ export async function POST(
     try {
       // 1) Members and completion rate
       const { data: pmRows } = await supabase
-        .from('party_members')
+        .from('friendparty.party_members')
         .select('id, is_npc, assessment_status')
         .eq('party_id', partyData.id);
 
@@ -212,7 +212,7 @@ export async function POST(
       let votingRate = 0;
       if (activeProposalIds.length > 0) {
         const { data: votes } = await supabase
-          .from('party_motto_votes')
+          .from('friendparty.party_motto_votes')
           .select('voter_member_id')
           .in('proposal_id', activeProposalIds);
 
@@ -227,7 +227,7 @@ export async function POST(
 
       // Use hysteresis-capable resolver; thresholds are primarily used for tie-break flows
       const { data: prevParty2 } = await supabase
-        .from('parties')
+        .from('friendparty.parties')
         .select('morale_level')
         .eq('id', partyData.id)
         .maybeSingle();
@@ -239,7 +239,7 @@ export async function POST(
       const nextLevel2 = resolveMoraleLevel(morale, previousLevel2);
 
       await supabase
-        .from('parties')
+        .from('friendparty.parties')
         .update({ morale_score: morale, morale_level: nextLevel2 })
         .eq('id', partyData.id);
     } catch (e) {

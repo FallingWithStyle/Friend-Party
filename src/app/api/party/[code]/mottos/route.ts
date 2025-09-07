@@ -22,7 +22,7 @@ export async function GET(
 
   // Resolve party by code
   const { data: party, error: partyErr } = await supabase
-    .from('parties')
+    .from('friendparty.parties')
     .select('id, motto, morale_score, morale_level')
     .eq('code', code)
     .single();
@@ -37,7 +37,7 @@ export async function GET(
   let meMemberId: string | null = null;
   {
     const { data: meMember, error: meErr } = await supabase
-      .from('party_members')
+      .from('friendparty.party_members')
       .select('id')
       .eq('party_id', party.id)
       .eq('user_id', userId)
@@ -50,7 +50,7 @@ export async function GET(
 
   // List proposals in this party (active first) using ONLY normalized columns
   const { data: proposals, error: propErr } = await supabase
-    .from('party_motto_proposals')
+    .from('friendparty.party_motto_proposals')
     .select('id, party_id, proposed_by_member_id, text, vote_count, is_finalized, active, created_at')
     .eq('party_id', party.id)
     .order('active', { ascending: false })
@@ -64,7 +64,7 @@ export async function GET(
   // Determine leader's party_member.id if any
   let leaderMemberId: string | null = null;
   const { data: leaderRow } = await supabase
-    .from('party_members')
+    .from('friendparty.party_members')
     .select('id')
     .eq('party_id', party.id)
     .eq('is_leader', true)
@@ -89,7 +89,7 @@ export async function GET(
   if (meMemberId) {
     const proposalIds = proposals.map(p => p.id);
     const { data: myVotes, error: voteErr } = await supabase
-      .from('party_motto_votes')
+      .from('friendparty.party_motto_votes')
       .select('proposal_id')
       .in('proposal_id', proposalIds)
       .eq('voter_member_id', meMemberId)
