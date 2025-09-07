@@ -45,6 +45,15 @@ DROP FUNCTION IF EXISTS public.create_party_with_leader(text, text, text, text, 
 DROP FUNCTION IF EXISTS public.generate_peer_assessment_distribution(uuid);
 
 -- Drop Tables
+DROP TABLE IF EXISTS public.dragons_hoard_hoard CASCADE;
+DROP TABLE IF EXISTS public.dragons_hoard_votes CASCADE;
+DROP TABLE IF EXISTS public.dragons_hoard_matchups CASCADE;
+DROP TABLE IF EXISTS public.dragons_hoard_loot CASCADE;
+DROP TABLE IF EXISTS public.dragons_hoard_prompts CASCADE;
+DROP TABLE IF EXISTS public.minigame_rewards CASCADE;
+DROP TABLE IF EXISTS public.minigame_participants CASCADE;
+DROP TABLE IF EXISTS public.minigame_sessions CASCADE;
+DROP TABLE IF EXISTS public.minigame_config CASCADE;
 DROP TABLE IF EXISTS public.answers CASCADE;
 DROP TABLE IF EXISTS public.name_proposal_votes CASCADE;
 DROP TABLE IF EXISTS public.party_motto_votes CASCADE;
@@ -213,6 +222,135 @@ COMMENT ON TABLE public.peer_assessment_assignments IS 'Stores the pre-calculate
 COMMENT ON COLUMN public.peer_assessment_assignments.assessor_member_id IS 'The party member who is assigned to perform the assessment.';
 COMMENT ON COLUMN public.peer_assessment_assignments.subject_member_id IS 'The party member who is the subject of the assessment.';
 
+-- == MINIGAME FRAMEWORK TABLES ==
+
+-- Minigame configuration table
+CREATE TABLE IF NOT EXISTS public.minigame_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  minigame_type VARCHAR(50) NOT NULL,
+  config_key VARCHAR(100) NOT NULL,
+  config_value JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  UNIQUE(minigame_type, config_key)
+);
+COMMENT ON TABLE public.minigame_config IS 'Configuration settings for different minigame types';
+COMMENT ON COLUMN public.minigame_config.minigame_type IS 'Type of minigame (e.g., dragons_hoard, changeling)';
+COMMENT ON COLUMN public.minigame_config.config_key IS 'Configuration key name';
+COMMENT ON COLUMN public.minigame_config.config_value IS 'Configuration value as JSON';
+
+-- Minigame sessions table
+CREATE TABLE IF NOT EXISTS public.minigame_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  party_id UUID NOT NULL REFERENCES public.parties(id) ON DELETE CASCADE,
+  minigame_type VARCHAR(50) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  completed_at TIMESTAMPTZ,
+  game_data JSONB,
+  CONSTRAINT valid_completion CHECK (
+    (status = 'completed' AND completed_at IS NOT NULL) OR 
+    (status != 'completed' AND completed_at IS NULL)
+  )
+);
+COMMENT ON TABLE public.minigame_sessions IS 'Tracks individual minigame sessions for any minigame type';
+COMMENT ON COLUMN public.minigame_sessions.minigame_type IS 'Type of minigame being played';
+COMMENT ON COLUMN public.minigame_sessions.status IS 'Current status of the minigame session';
+COMMENT ON COLUMN public.minigame_sessions.game_data IS 'Minigame-specific data stored as JSON';
+
+-- Minigame participants table
+CREATE TABLE IF NOT EXISTS public.minigame_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.minigame_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  left_at TIMESTAMPTZ,
+  participant_data JSONB,
+  UNIQUE(session_id, user_id)
+);
+COMMENT ON TABLE public.minigame_participants IS 'Tracks who participated in each minigame session';
+COMMENT ON COLUMN public.minigame_participants.participant_data IS 'Minigame-specific participant data as JSON';
+
+-- Minigame rewards table
+CREATE TABLE IF NOT EXISTS public.minigame_rewards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.minigame_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  reward_type VARCHAR(50) NOT NULL,
+  reward_data JSONB NOT NULL,
+  awarded_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.minigame_rewards IS 'Tracks rewards awarded to users from minigames';
+COMMENT ON COLUMN public.minigame_rewards.reward_type IS 'Type of reward (xp, achievement, avatar_part, etc.)';
+COMMENT ON COLUMN public.minigame_rewards.reward_data IS 'Reward-specific data as JSON';
+
+-- == DRAGON'S HOARD MINIGAME TABLES ==
+
+-- Dragon's Hoard prompts table
+CREATE TABLE IF NOT EXISTS public.dragons_hoard_prompts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  prompt_text TEXT NOT NULL,
+  category VARCHAR(50) NOT NULL,
+  is_active BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.dragons_hoard_prompts IS 'Prompts for Dragon''s Hoard loot creation';
+COMMENT ON COLUMN public.dragons_hoard_prompts.category IS 'Prompt category (cursed_items, goblin_market, dragon_secrets, cooking_weapons)';
+COMMENT ON COLUMN public.dragons_hoard_prompts.prompt_text IS 'The prompt text with placeholders for player names';
+
+-- Dragon's Hoard loot table
+CREATE TABLE IF NOT EXISTS public.dragons_hoard_loot (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.minigame_sessions(id) ON DELETE CASCADE,
+  creator_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  prompt_id UUID NOT NULL REFERENCES public.dragons_hoard_prompts(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.dragons_hoard_loot IS 'Loot items created by players in Dragon''s Hoard';
+COMMENT ON COLUMN public.dragons_hoard_loot.creator_id IS 'User who created this loot item';
+COMMENT ON COLUMN public.dragons_hoard_loot.prompt_id IS 'Prompt that inspired this loot item';
+
+-- Dragon's Hoard matchups table
+CREATE TABLE IF NOT EXISTS public.dragons_hoard_matchups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.minigame_sessions(id) ON DELETE CASCADE,
+  loot_a_id UUID NOT NULL REFERENCES public.dragons_hoard_loot(id) ON DELETE CASCADE,
+  loot_b_id UUID NOT NULL REFERENCES public.dragons_hoard_loot(id) ON DELETE CASCADE,
+  round_number INTEGER NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'voting', 'completed')),
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  completed_at TIMESTAMPTZ,
+  CONSTRAINT different_loot CHECK (loot_a_id != loot_b_id)
+);
+COMMENT ON TABLE public.dragons_hoard_matchups IS 'Head-to-head matchups between loot items';
+COMMENT ON COLUMN public.dragons_hoard_matchups.round_number IS 'Round number for this matchup';
+COMMENT ON COLUMN public.dragons_hoard_matchups.status IS 'Current status of the matchup';
+
+-- Dragon's Hoard votes table
+CREATE TABLE IF NOT EXISTS public.dragons_hoard_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  matchup_id UUID NOT NULL REFERENCES public.dragons_hoard_matchups(id) ON DELETE CASCADE,
+  voter_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  voted_for_loot_id UUID NOT NULL REFERENCES public.dragons_hoard_loot(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  UNIQUE(matchup_id, voter_id)
+);
+COMMENT ON TABLE public.dragons_hoard_votes IS 'Votes cast in Dragon''s Hoard matchups';
+COMMENT ON COLUMN public.dragons_hoard_votes.voted_for_loot_id IS 'Loot item that received the vote';
+
+-- Dragon's Hoard hoard table (persistent collection)
+CREATE TABLE IF NOT EXISTS public.dragons_hoard_hoard (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  party_id UUID NOT NULL REFERENCES public.parties(id) ON DELETE CASCADE,
+  loot_id UUID NOT NULL REFERENCES public.dragons_hoard_loot(id) ON DELETE CASCADE,
+  added_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  UNIQUE(party_id, loot_id)
+);
+COMMENT ON TABLE public.dragons_hoard_hoard IS 'Persistent collection of winning loot items for each party';
+COMMENT ON COLUMN public.dragons_hoard_hoard.party_id IS 'Party that owns this hoard';
+COMMENT ON COLUMN public.dragons_hoard_hoard.loot_id IS 'Winning loot item added to the hoard';
 
 -- == 3. CREATE FUNCTIONS ==
 CREATE OR REPLACE FUNCTION public.create_party_with_leader(
@@ -465,8 +603,250 @@ FOR DELETE TO authenticated USING (
 CREATE POLICY "Allow members to see their own assessment assignments" ON public.peer_assessment_assignments FOR SELECT TO authenticated USING (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));
 CREATE POLICY "Allow members to insert their own assessment assignments" ON public.peer_assessment_assignments FOR INSERT TO authenticated WITH CHECK (assessor_member_id IN (SELECT id FROM public.party_members WHERE user_id = auth.uid()));
 
+-- Enable RLS for minigame tables
+ALTER TABLE public.minigame_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.minigame_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.minigame_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.minigame_rewards ENABLE ROW LEVEL SECURITY;
+
+-- Enable RLS for Dragon's Hoard tables
+ALTER TABLE public.dragons_hoard_prompts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dragons_hoard_loot ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dragons_hoard_matchups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dragons_hoard_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dragons_hoard_hoard ENABLE ROW LEVEL SECURITY;
+
+-- Policies for public.minigame_config
+CREATE POLICY "Allow all users to read minigame config" ON public.minigame_config FOR SELECT USING (true);
+
+-- Policies for public.minigame_sessions
+CREATE POLICY "Allow party members to see minigame sessions" ON public.minigame_sessions FOR SELECT TO authenticated USING (
+  is_party_member(party_id, auth.uid())
+);
+CREATE POLICY "Allow party members to create minigame sessions" ON public.minigame_sessions FOR INSERT TO authenticated WITH CHECK (
+  is_party_member(party_id, auth.uid())
+);
+CREATE POLICY "Allow party members to update minigame sessions" ON public.minigame_sessions FOR UPDATE TO authenticated USING (
+  is_party_member(party_id, auth.uid())
+);
+
+-- Policies for public.minigame_participants
+CREATE POLICY "Allow party members to see minigame participants" ON public.minigame_participants FOR SELECT TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow users to join minigame sessions" ON public.minigame_participants FOR INSERT TO authenticated WITH CHECK (
+  user_id = auth.uid() AND
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow users to update their own participation" ON public.minigame_participants FOR UPDATE TO authenticated USING (
+  user_id = auth.uid()
+) WITH CHECK (
+  user_id = auth.uid()
+);
+
+-- Policies for public.minigame_rewards
+CREATE POLICY "Allow users to see their own minigame rewards" ON public.minigame_rewards FOR SELECT TO authenticated USING (
+  user_id = auth.uid() OR
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow system to create minigame rewards" ON public.minigame_rewards FOR INSERT TO authenticated WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+
+-- Policies for public.dragons_hoard_prompts
+CREATE POLICY "Allow all users to read Dragon's Hoard prompts" ON public.dragons_hoard_prompts FOR SELECT USING (is_active = true);
+
+-- Policies for public.dragons_hoard_loot
+CREATE POLICY "Allow party members to see Dragon's Hoard loot" ON public.dragons_hoard_loot FOR SELECT TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow users to create Dragon's Hoard loot" ON public.dragons_hoard_loot FOR INSERT TO authenticated WITH CHECK (
+  creator_id = auth.uid() AND
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+
+-- Policies for public.dragons_hoard_matchups
+CREATE POLICY "Allow party members to see Dragon's Hoard matchups" ON public.dragons_hoard_matchups FOR SELECT TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow party members to create Dragon's Hoard matchups" ON public.dragons_hoard_matchups FOR INSERT TO authenticated WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow party members to update Dragon's Hoard matchups" ON public.dragons_hoard_matchups FOR UPDATE TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    WHERE ms.id = session_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+
+-- Policies for public.dragons_hoard_votes
+CREATE POLICY "Allow party members to see Dragon's Hoard votes" ON public.dragons_hoard_votes FOR SELECT TO authenticated USING (
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    JOIN public.dragons_hoard_matchups dm ON dm.session_id = ms.id
+    WHERE dm.id = matchup_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+CREATE POLICY "Allow users to vote in Dragon's Hoard" ON public.dragons_hoard_votes FOR INSERT TO authenticated WITH CHECK (
+  voter_id = auth.uid() AND
+  EXISTS (
+    SELECT 1 FROM public.minigame_sessions ms 
+    JOIN public.dragons_hoard_matchups dm ON dm.session_id = ms.id
+    WHERE dm.id = matchup_id AND is_party_member(ms.party_id, auth.uid())
+  )
+);
+
+-- Policies for public.dragons_hoard_hoard
+CREATE POLICY "Allow party members to see Dragon's Hoard collection" ON public.dragons_hoard_hoard FOR SELECT TO authenticated USING (
+  is_party_member(party_id, auth.uid())
+);
+CREATE POLICY "Allow system to add to Dragon's Hoard collection" ON public.dragons_hoard_hoard FOR INSERT TO authenticated WITH CHECK (
+  is_party_member(party_id, auth.uid())
+);
 
 -- == 5. SEED INITIAL DATA ==
+
+INSERT INTO public.dragons_hoard_prompts (prompt_text, category) VALUES
+-- Goblin Market (20 prompts)
+('The most useless item you could buy at a goblin market.', 'goblin_market'),
+('A goblin market stall sells this surprisingly inconvenient item.', 'goblin_market'),
+('A goblin market item that has a very specific, mysterious purpose.', 'goblin_market'),
+('A goblin market sells an item that was clearly made by someone who misunderstood the assignment.', 'goblin_market'),
+('A trap in a goblin market alley that makes absolutely no sense.', 'goblin_market'),
+('Something hidden under a goblin market table no one notices.', 'goblin_market'),
+('A goblin market vendor insists this item is "very rare" but won''t explain why.', 'goblin_market'),
+('An item at a goblin market that nobody knows how to use.', 'goblin_market'),
+('Something a goblin enchanted for reasons no one remembers.', 'goblin_market'),
+('A goblin market sells this item that defies all expectations.', 'goblin_market'),
+('A goblin market has this confusing bargain bin item.', 'goblin_market'),
+('A goblin vendor hides this bizarre item from customers.', 'goblin_market'),
+('A cursed goblin trinket that behaves strangely.', 'goblin_market'),
+('The weirdest "common" item at a goblin market.', 'goblin_market'),
+('A magical snack sold by goblins with unusual effects.', 'goblin_market'),
+('A goblin market item that nobody would ever want—but someone buys it.', 'goblin_market'),
+('An ordinary object in a goblin market that is secretly magical.', 'goblin_market'),
+('A goblin sells this object claiming it''s "ancient and powerful."', 'goblin_market'),
+('Something a goblin uses as a disguise for their loot.', 'goblin_market'),
+('An item at a goblin market that makes absolutely no sense.', 'goblin_market'),
+
+-- Dragon's Hoard (20 prompts)
+('A dragon''s hoard contains this embarrassing object.', 'dragons_hoard'),
+('The most ridiculous decoration in a dragon''s hoard.', 'dragons_hoard'),
+('The most awkwardly magical item in a dragon''s hoard.', 'dragons_hoard'),
+('An object in a dragon''s private collection with an unexpected magical effect.', 'dragons_hoard'),
+('A dragon uses this to prank other dragons.', 'dragons_hoard'),
+('A gemstone in a dragon''s hoard with a totally unexpected property.', 'dragons_hoard'),
+('A magical creature hoards this for sentimental reasons.', 'dragons_hoard'),
+('An object a dragon treasures for mysterious reasons.', 'dragons_hoard'),
+('The strangest gem a dragon refuses to part with.', 'dragons_hoard'),
+('A dragon accidentally enchanted this as a joke.', 'dragons_hoard'),
+('Something a dragon considers an utterly useless treasure.', 'dragons_hoard'),
+('A cursed object hidden in a dragon''s hoard.', 'dragons_hoard'),
+('An oddly shaped treasure a dragon refuses to sell.', 'dragons_hoard'),
+('An item a dragon keeps for its bizarre smell or texture.', 'dragons_hoard'),
+('A dragon''s hoard contains a treasure that seems alive.', 'dragons_hoard'),
+('A dragon secretly collects mundane items in elaborate ways.', 'dragons_hoard'),
+('A dragon uses this item as a puzzle for intruders.', 'dragons_hoard'),
+('A dragon keeps an item purely because it''s ridiculous.', 'dragons_hoard'),
+('A magical object in a dragon''s hoard that changes form constantly.', 'dragons_hoard'),
+('Something in a dragon''s hoard that clearly does nothing… or does it?', 'dragons_hoard'),
+
+-- Wizard's Tower / Spellbook Collection (15 prompts)
+('The strangest item a wizard collects as part of their hobby.', 'wizards_tower'),
+('An object a wizard keeps that inspires curiosity and confusion.', 'wizards_tower'),
+('An object in a wizard''s collection that does something confusing.', 'wizards_tower'),
+('A magical item in a wizard''s spellbook collection that does something confusing.', 'wizards_tower'),
+('A wizard''s failed experiment now worshipped as art.', 'wizards_tower'),
+('A wizard''s failed experiment is now a fashionable hat.', 'wizards_tower'),
+('A confusing potion label in a wizard''s tower.', 'wizards_tower'),
+('A magical scroll with instructions for an oddly specific task.', 'wizards_tower'),
+('A magical scroll that seems ordinary but has a surprising effect when read.', 'wizards_tower'),
+('An enchanted object that has a completely useless power.', 'wizards_tower'),
+('Something a wizard enchanted for reasons no one remembers.', 'wizards_tower'),
+('A wizard''s spellbook contains a magical object nobody expected.', 'wizards_tower'),
+('A wizard collects an item that defies all logic.', 'wizards_tower'),
+('A wizard''s hoard contains an item that constantly changes.', 'wizards_tower'),
+('A magical item a wizard treasures for mysterious reasons.', 'wizards_tower'),
+
+-- Rogue's Hideout (10 prompts)
+('A rogue''s hideout has a trap disguised as this ordinary object.', 'rogues_hideout'),
+('A rogue''s hideout contains this completely unnecessary gadget.', 'rogues_hideout'),
+('A rogue''s hideout contains this item that makes no sense as a trap.', 'rogues_hideout'),
+('A rogue''s hideout has this completely normal item that somehow triggers all the other traps.', 'rogues_hideout'),
+('An ordinary object in a rogue''s hideout that is secretly magical.', 'rogues_hideout'),
+('A rogue keeps an item purely for amusement.', 'rogues_hideout'),
+('A trap disguised as something mundane in a rogue''s hideout.', 'rogues_hideout'),
+('Something a rogue uses to confuse intruders.', 'rogues_hideout'),
+('A rogue keeps this bizarre item locked away for no reason.', 'rogues_hideout'),
+('A rogue''s hoard contains an item that behaves unpredictably.', 'rogues_hideout'),
+
+-- Cursed Tomb / Haunted Locations (10 prompts)
+('Something a cursed tomb refuses to let you take.', 'cursed_tomb'),
+('A cursed tomb contains this item nobody expected to be magical.', 'cursed_tomb'),
+('A cursed tomb contains this item that everyone expected to be magical but isn''t.', 'cursed_tomb'),
+('A haunted item a necromancer treasures for mysterious reasons.', 'cursed_tomb'),
+('A cursed object in a tomb with a strange effect.', 'cursed_tomb'),
+('Something in a tomb that seems ordinary but is secretly cursed.', 'cursed_tomb'),
+('A haunted relic in a tomb nobody understands.', 'cursed_tomb'),
+('An object in a cursed tomb that constantly changes.', 'cursed_tomb'),
+('A tomb contains a treasure that defies all logic.', 'cursed_tomb'),
+('A cursed item in a tomb that acts strangely when touched.', 'cursed_tomb'),
+
+-- Pirate / Underwater Loot (10 prompts)
+('Something a mermaid hoards in a sunken treasure chest.', 'pirate_underwater'),
+('A mermaid keeps this completely useless treasure for decoration.', 'pirate_underwater'),
+('A mermaid hoards this ridiculous luxury item.', 'pirate_underwater'),
+('An item in a sunken chest that behaves oddly underwater.', 'pirate_underwater'),
+('Something a mermaid treasures that no one would expect.', 'pirate_underwater'),
+('A pirate''s chest contains an item with a very strange or unexpected use.', 'pirate_underwater'),
+('A pirate''s chest contains an item that looks valuable but is completely worthless.', 'pirate_underwater'),
+('A pirate''s chest contains this item that''s completely impossible to use.', 'pirate_underwater'),
+('An item in a pirate''s chest that seems ordinary but has a bizarre effect.', 'pirate_underwater'),
+('A pirate hides a strange object in a chest to confuse thieves.', 'pirate_underwater'),
+
+-- Giant / Forest / Druid Loot (5 prompts)
+('Something a giant uses as furniture in their cave.', 'giant_forest'),
+('A giant accidentally turned this into a weapon.', 'giant_forest'),
+('A giant accidentally enchanted this as a toy.', 'giant_forest'),
+('A forest druid grows this as a "practical" item.', 'giant_forest'),
+('A druid keeps this mysterious object in their forest hut.', 'giant_forest'),
+
+-- Knight Armory / Tavern (10 prompts)
+('A weapon in a knight''s armory that does something very weird.', 'knight_tavern'),
+('A sword with a very unusual or surprising effect when used.', 'knight_tavern'),
+('The weakest weapon in a knight''s collection.', 'knight_tavern'),
+('A weapon that does something completely unexpected.', 'knight_tavern'),
+('A knight accidentally enchanted this weapon for bizarre results.', 'knight_tavern'),
+('Something hidden under a tavern table no one notices.', 'knight_tavern'),
+('Something a tavern patron left behind that everyone assumes is trash.', 'knight_tavern'),
+('Something a tavern owner hides behind the bar.', 'knight_tavern'),
+('A tavern has an object that behaves oddly when touched.', 'knight_tavern'),
+('An item in a tavern that everyone ignores but is secretly magical.', 'knight_tavern');
+
 INSERT INTO public.stats (id, name) VALUES
 ('STR', 'Strength'),
 ('DEX', 'Dexterity'),
